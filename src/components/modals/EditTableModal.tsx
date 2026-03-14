@@ -24,6 +24,7 @@ export default function EditTableModal({ table, onClose }: EditTableModalProps) 
     TABLE_PRESETS.find((p) => p.type === table.type && p.sizeFt === table.sizeFt) ?? TABLE_PRESETS[0]
   )
   const [draftCount, setDraftCount] = useState(table.seats.length)
+  const [draftRotation, setDraftRotation] = useState(table.rotation)
   const [seatsToUnassign, setSeatsToUnassign] = useState<Set<string>>(new Set())
   const [requiredUnassignCount, setRequiredUnassignCount] = useState(0)
 
@@ -124,6 +125,7 @@ export default function EditTableModal({ table, onClose }: EditTableModalProps) 
       type: draftPreset.type,
       sizeFt: draftPreset.sizeFt,
       widthFt: draftPreset.widthFt,
+      rotation: ((draftRotation % 360) + 360) % 360,
       seats: newSeats,
     }
 
@@ -227,6 +229,22 @@ export default function EditTableModal({ table, onClose }: EditTableModalProps) 
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Rotation */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Rotation (°)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={359}
+              step={1}
+              value={draftRotation}
+              onChange={(e) => setDraftRotation(Number(e.target.value))}
+              className="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            />
           </div>
 
           {/* Buttons */}

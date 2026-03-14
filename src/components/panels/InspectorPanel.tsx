@@ -117,6 +117,9 @@ function TableInspector({ table, warnings = [] }: { table: Table; warnings?: str
             const guest: Guest | undefined = seat.guestId ? guestMap[seat.guestId] : undefined
             return (
               <div key={seat.id} className="flex items-center gap-2 py-1.5">
+                <span className="w-5 flex-shrink-0 text-right text-xs font-medium text-slate-300">
+                  {seat.index + 1}
+                </span>
                 {guest ? (
                   <>
                     <button
@@ -290,7 +293,7 @@ function SeatInspector({ seat, tableLabel, tableId }: { seat: Seat; tableLabel: 
           <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 2L3 6l4 4" />
           </svg>
-          {tableLabel}
+          {tableLabel} — Seat {seat.index + 1}
         </button>
       </div>
 
@@ -359,7 +362,7 @@ export default function InspectorPanel() {
       {/* Header */}
       <div className="border-b border-slate-100 px-4 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          {selectedTable ? 'Table' : selectedSeat ? seatTable!.label : 'Inspector'}
+          {selectedTable ? 'Table' : selectedSeat ? `Seat ${selectedSeat.index + 1}` : 'Inspector'}
         </p>
       </div>
 

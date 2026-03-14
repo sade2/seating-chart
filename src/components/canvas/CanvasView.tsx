@@ -19,7 +19,6 @@ type DragState =
   | { type: 'none' }
   | { type: 'pan'; startMouse: Point; startPan: Point }
   | { type: 'table'; tableId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
-  | { type: 'rotate'; tableId: string; tableCenterScreen: Point; currentRotation: number }
 
 const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_props, ref) {
   const project = useProjectStore((s) => s.project)
@@ -151,19 +150,7 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
     })
   }
 
-  const handleRotateHandleMouseDown = (e: React.MouseEvent, tableId: string) => {
-    if (e.button !== 0) return
-    const table = project?.tables.find((t) => t.id === tableId)
-    if (!table) return
-    const pxPerFt = project!.room.pixelsPerFoot
-    const tableCenterScreen: Point = {
-      x: table.x * pxPerFt * zoomRef.current + panRef.current.x,
-      y: table.y * pxPerFt * zoomRef.current + panRef.current.y,
-    }
-    setDrag({ type: 'rotate', tableId, tableCenterScreen, currentRotation: table.rotation })
-  }
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const d = dragRef.current
     if (d.type === 'none') return
 
@@ -182,22 +169,12 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
       return
     }
 
-    if (d.type === 'rotate') {
-      const dx = e.clientX - d.tableCenterScreen.x
-      const dy = e.clientY - d.tableCenterScreen.y
-      let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90
-      if (e.shiftKey) angle = Math.round(angle / 15) * 15
-      setDrag({ ...d, currentRotation: angle })
-    }
   }
 
   const handleMouseUp = async () => {
     const d = dragRef.current
     if (d.type === 'table') {
       await updateTable(d.tableId, { x: d.currentPosFt.x, y: d.currentPosFt.y })
-    }
-    if (d.type === 'rotate') {
-      await updateTable(d.tableId, { rotation: d.currentRotation })
     }
     setDrag({ type: 'none' })
   }
@@ -250,13 +227,7 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
                     ? drag.currentPosFt
                     : undefined
                 }
-                overrideRotation={
-                  drag.type === 'rotate' && drag.tableId === table.id
-                    ? drag.currentRotation
-                    : undefined
-                }
                 onMouseDown={handleTableMouseDown}
-                onRotateHandleMouseDown={handleRotateHandleMouseDown}
                 onSeatClick={handleSeatClick}
                 onTableClick={handleTableClick}
               />
@@ -266,8 +237,39 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
       </svg>
 
       <ScaleBar pixelsPerFoot={effectivePxPerFt} />
+
+      {/* Zoom controls — bottom right */}
+      <div className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-2">
+        <span className="pointer-events-none text-xs text-slate-500">{Math.round(zoom * 100)}%</span>
+        <button
+          onClick={handleResetZoom}
+          title="Reset zoom to fit"
+          className="pointer-events-auto rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 shadow-sm hover:bg-slate-50 hover:text-slate-700"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
+
+  function handleResetZoom() {
+    const svg = svgRef.current
+    if (!svg || !project) return
+    const { width, height } = svg.getBoundingClientRect()
+    const { widthFt, heightFt, pixelsPerFoot } = project.room
+    const roomW = widthFt * pixelsPerFoot
+    const roomH = heightFt * pixelsPerFoot
+    const fitZoom = Math.min(1, (width * 0.85) / roomW, (height * 0.85) / roomH)
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitZoom))
+    const newPan = {
+      x: (width - roomW * newZoom) / 2,
+      y: (height - roomH * newZoom) / 2,
+    }
+    setZoom(newZoom)
+    setPan(newPan)
+  }
 
   function handleTableClick(tableId: string) {
     if (pendingGuestId) return

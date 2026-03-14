@@ -6,6 +6,7 @@ interface SeatCircleProps {
   x: number
   y: number
   zoom: number
+  tableRotation?: number   // counter-rotate initials to keep them upright
   guestName?: string       // set when seat is occupied
   isSelected?: boolean     // amber highlight
   isPending?: boolean      // pulsing outline during assignment mode
@@ -18,6 +19,7 @@ export default function SeatCircle({
   x,
   y,
   zoom,
+  tableRotation = 0,
   guestName,
   isSelected = false,
   isPending = false,
@@ -75,19 +77,21 @@ export default function SeatCircle({
         strokeWidth={sw}
       />
       {isOccupied && initials && (
-        <text
-          x={x}
-          y={y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={Math.round(screenR * 0.65) / zoom}
-          fill="white"
-          fontFamily="system-ui, sans-serif"
-          fontWeight="600"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          {initials}
-        </text>
+        <g transform={`rotate(${-tableRotation}, ${x}, ${y})`}>
+          <text
+            x={x}
+            y={y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={Math.round(screenR * 0.65) / zoom}
+            fill="white"
+            fontFamily="system-ui, sans-serif"
+            fontWeight="600"
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
+          >
+            {initials}
+          </text>
+        </g>
       )}
     </g>
   )

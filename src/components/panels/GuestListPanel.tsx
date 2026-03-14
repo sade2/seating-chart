@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
 import type { Guest } from '../../types'
 import Modal from '../ui/Modal'
-import { parseGuestCSV } from '../../lib/csvParser'
+import CsvImportModal from '../modals/CsvImportModal'
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -209,6 +209,7 @@ type ModalState =
   | { type: 'add' }
   | { type: 'edit'; guest: Guest }
   | { type: 'delete'; guest: Guest }
+  | { type: 'csv' }
 
 export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: string) => void }) {
   const project = useProjectStore((s) => s.project)
@@ -222,7 +223,6 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
   const [toast, setToast] = useState<string | null>(null)
-  const csvInputRef = useRef<HTMLInputElement>(null)
 
   if (!project) return null
 
@@ -265,41 +265,6 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
     setModal({ type: 'none' })
   }
 
-  // ── CSV import ──────────────────────────────────────────────────────────────
-
-  const handleCSVChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    // Reset input so the same file can be re-imported
-    e.target.value = ''
-
-    const existingNames = new Set(guests.map((g) => g.name.toLowerCase()))
-
-    try {
-      const { guests: rows, skipped } = await parseGuestCSV(file, existingNames)
-
-      for (const row of rows) {
-        await addGuest({
-          id: crypto.randomUUID(),
-          name: row.name,
-          group: row.group,
-          notes: row.notes,
-          seatId: null,
-        })
-      }
-
-      const msg =
-        rows.length === 0
-          ? `No new guests imported (${skipped} skipped)`
-          : skipped > 0
-          ? `Imported ${rows.length} guest${rows.length !== 1 ? 's' : ''} (${skipped} skipped)`
-          : `Imported ${rows.length} guest${rows.length !== 1 ? 's' : ''}`
-
-      setToast(msg)
-    } catch {
-      setToast('Failed to parse CSV — check the file format.')
-    }
-  }
 
   return (
     <>
@@ -313,7 +278,7 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
             <div className="flex items-center gap-1">
               {/* Import CSV */}
               <button
-                onClick={() => csvInputRef.current?.click()}
+                onClick={() => setModal({ type: 'csv' })}
                 title="Import CSV"
                 className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
@@ -396,15 +361,6 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
         </div>
       </aside>
 
-      {/* Hidden CSV file input */}
-      <input
-        ref={csvInputRef}
-        type="file"
-        accept=".csv,text/csv"
-        className="hidden"
-        onChange={handleCSVChange}
-      />
-
       {/* Modals */}
       {modal.type === 'add' && (
         <GuestFormModal onClose={() => setModal({ type: 'none' })} onSave={handleSave} />
@@ -421,6 +377,12 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
           guest={modal.guest}
           onClose={() => setModal({ type: 'none' })}
           onConfirm={() => handleDelete(modal.guest)}
+        />
+      )}
+      {modal.type === 'csv' && (
+        <CsvImportModal
+          onClose={() => setModal({ type: 'none' })}
+          onImported={(msg) => { setToast(msg); setModal({ type: 'none' }) }}
         />
       )}
 

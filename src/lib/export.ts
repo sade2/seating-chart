@@ -60,9 +60,11 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
         const stroke = '#9ca3af'
         const textEl =
           isOccupied && guestNameMap[seat.id]
-            ? `<text x="${pos.x}" y="${pos.y}" text-anchor="middle" dominant-baseline="central" ` +
+            ? `<g transform="rotate(${-table.rotation}, ${pos.x}, ${pos.y})">` +
+              `<text x="${pos.x}" y="${pos.y}" text-anchor="middle" dominant-baseline="central" ` +
               `font-size="${SEAT_R * 0.85}" fill="white" font-family="Arial, sans-serif" font-weight="bold">` +
-              `${escapeXml(getInitials(guestNameMap[seat.id]))}</text>`
+              `${escapeXml(getInitials(guestNameMap[seat.id]))}</text>` +
+              `</g>`
             : ''
         return (
           `<circle cx="${pos.x}" cy="${pos.y}" r="${SEAT_R}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>` +

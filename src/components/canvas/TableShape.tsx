@@ -1,10 +1,8 @@
 import type { Table } from '../../types'
 import {
   getSeatPositions,
-  getHandleY,
   getTableHalfW,
   getTableHalfH,
-  HANDLE_SCREEN_R,
 } from '../../lib/tableGeometry'
 import SeatCircle from './SeatCircle'
 
@@ -18,9 +16,7 @@ interface TableShapeProps {
   guestNameMap: Record<string, string>  // seatId → guest name
   warnings: string[]
   overridePos?: { x: number; y: number }
-  overrideRotation?: number
   onMouseDown: (e: React.MouseEvent, tableId: string) => void
-  onRotateHandleMouseDown: (e: React.MouseEvent, tableId: string) => void
   onSeatClick: (seatId: string) => void
   onTableClick: (tableId: string) => void
 }
@@ -35,22 +31,17 @@ export default function TableShape({
   guestNameMap,
   warnings,
   overridePos,
-  overrideRotation,
   onMouseDown,
-  onRotateHandleMouseDown,
   onSeatClick,
   onTableClick,
 }: TableShapeProps) {
   const x = (overridePos?.x ?? table.x) * pixelsPerFoot
   const y = (overridePos?.y ?? table.y) * pixelsPerFoot
-  const rotation = overrideRotation ?? table.rotation
+  const rotation = table.rotation
 
   const halfW = getTableHalfW(table, pixelsPerFoot)
   const halfH = getTableHalfH(table, pixelsPerFoot)
   const seatPositions = getSeatPositions(table, pixelsPerFoot)
-  const handleY = getHandleY(table, pixelsPerFoot)
-
-  const isRect = table.type === 'rectangular' || table.type === 'square'
 
   return (
     <g transform={`translate(${x}, ${y}) rotate(${rotation})`}>
@@ -130,6 +121,7 @@ export default function TableShape({
             x={pos.x}
             y={pos.y}
             zoom={zoom}
+            tableRotation={rotation}
             guestName={isOccupied ? guestNameMap[seat.id] : undefined}
             isSelected={selectedSeatId === seat.id}
             isPending={!!pendingGuestId && !isOccupied}
@@ -169,35 +161,6 @@ export default function TableShape({
         </text>
       )}
 
-      {/* Rotation handle — rectangular and square only */}
-      {isRect && (
-        <g>
-          {/* Stem line */}
-          <line
-            x1={0}
-            y1={-halfH}
-            x2={0}
-            y2={handleY}
-            stroke="#94a3b8"
-            strokeWidth={1 / zoom}
-            style={{ pointerEvents: 'none' }}
-          />
-          {/* Handle circle */}
-          <circle
-            cx={0}
-            cy={handleY}
-            r={HANDLE_SCREEN_R / zoom}
-            fill="white"
-            stroke="#94a3b8"
-            strokeWidth={1.5 / zoom}
-            style={{ cursor: 'grab' }}
-            onMouseDown={(e) => {
-              e.stopPropagation()
-              onRotateHandleMouseDown(e, table.id)
-            }}
-          />
-        </g>
-      )}
     </g>
   )
 }
