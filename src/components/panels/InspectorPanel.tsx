@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
 import type { Guest, Table, Seat } from '../../types'
 import Modal from '../ui/Modal'
+import { getTableWarnings } from '../../lib/warnings'
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
 
@@ -259,10 +260,11 @@ function TableInspector({ table, warnings = [] }: { table: Table; warnings?: str
 
 // ── Seat inspector ─────────────────────────────────────────────────────────────
 
-function SeatInspector({ seat, tableLabel }: { seat: Seat; tableLabel: string }) {
+function SeatInspector({ seat, tableLabel, tableId }: { seat: Seat; tableLabel: string; tableId: string }) {
   const project = useProjectStore((s) => s.project)
   const unassignSeat = useProjectStore((s) => s.unassignSeat)
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
+  const setSelectedTable = useProjectStore((s) => s.setSelectedTable)
 
   const guest = seat.guestId
     ? project?.guests.find((g) => g.id === seat.guestId)
@@ -274,6 +276,18 @@ function SeatInspector({ seat, tableLabel }: { seat: Seat; tableLabel: string })
 
   return (
     <>
+      <div className="border-b border-slate-100 px-4 py-2">
+        <button
+          onClick={() => setSelectedTable(tableId)}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600"
+        >
+          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 2L3 6l4 4" />
+          </svg>
+          {tableLabel}
+        </button>
+      </div>
+
       <Section>
         <SectionLabel>Table</SectionLabel>
         <ReadOnlyField value={tableLabel} />
@@ -349,9 +363,9 @@ export default function InspectorPanel() {
       </div>
 
       {selectedTable ? (
-        <TableInspector key={selectedTable.id} table={selectedTable} />
+        <TableInspector key={selectedTable.id} table={selectedTable} warnings={getTableWarnings(selectedTable, project.room)} />
       ) : selectedSeat && seatTable ? (
-        <SeatInspector key={selectedSeat.id} seat={selectedSeat} tableLabel={seatTable.label} />
+        <SeatInspector key={selectedSeat.id} seat={selectedSeat} tableLabel={seatTable.label} tableId={seatTable.id} />
       ) : (
         <EmptyInspector room={project.room} />
       )}

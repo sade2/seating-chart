@@ -16,6 +16,7 @@ interface TableShapeProps {
   selectedSeatId: string | null
   pendingGuestId: string | null
   guestNameMap: Record<string, string>  // seatId → guest name
+  warnings: string[]
   overridePos?: { x: number; y: number }
   overrideRotation?: number
   onMouseDown: (e: React.MouseEvent, tableId: string) => void
@@ -32,6 +33,7 @@ export default function TableShape({
   selectedSeatId,
   pendingGuestId,
   guestNameMap,
+  warnings,
   overridePos,
   overrideRotation,
   onMouseDown,
@@ -52,6 +54,15 @@ export default function TableShape({
 
   return (
     <g transform={`translate(${x}, ${y}) rotate(${rotation})`}>
+      {/* Warning drop-shadow filter */}
+      {warnings.length > 0 && (
+        <defs>
+          <filter id={`warn-${table.id}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation={5 / zoom} floodColor="#ef4444" floodOpacity="0.7" />
+          </filter>
+        </defs>
+      )}
+
       {/* Selection ring */}
       {isSelected && (
         <>
@@ -86,6 +97,7 @@ export default function TableShape({
           fill="#f1f5f9"
           stroke="#94a3b8"
           strokeWidth={2 / zoom}
+          filter={warnings.length > 0 ? `url(#warn-${table.id})` : undefined}
           style={{ cursor: 'move' }}
           onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, table.id) }}
           onClick={(e) => { e.stopPropagation(); onTableClick(table.id) }}
@@ -100,6 +112,7 @@ export default function TableShape({
           fill="#f1f5f9"
           stroke="#94a3b8"
           strokeWidth={2 / zoom}
+          filter={warnings.length > 0 ? `url(#warn-${table.id})` : undefined}
           style={{ cursor: 'move' }}
           onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, table.id) }}
           onClick={(e) => { e.stopPropagation(); onTableClick(table.id) }}
@@ -140,6 +153,21 @@ export default function TableShape({
       >
         {table.label}
       </text>
+
+      {/* Warning indicator */}
+      {warnings.length > 0 && (
+        <text
+          x={table.type === 'round' ? halfW * 0.7 : halfW + 4 / zoom}
+          y={table.type === 'round' ? -halfW * 0.7 : -halfH - 4 / zoom}
+          fontSize={12 / zoom}
+          fill="#ef4444"
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          ⚠
+        </text>
+      )}
 
       {/* Rotation handle — rectangular and square only */}
       {isRect && (

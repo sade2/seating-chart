@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../db'
 import { useProjectStore } from '../store/projectStore'
 import { TABLE_PRESETS, type TablePreset } from '../types'
 import type { Seat, Table } from '../types'
-import CanvasView from '../components/canvas/CanvasView'
+import CanvasView, { type CanvasViewHandle } from '../components/canvas/CanvasView'
 import GuestListPanel from '../components/panels/GuestListPanel'
 import InspectorPanel from '../components/panels/InspectorPanel'
 import Modal from '../components/ui/Modal'
@@ -211,6 +211,12 @@ export default function ProjectPage() {
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
 
+  const canvasRef = useRef<CanvasViewHandle>(null)
+
+  const handlePanToSeat = useCallback((seatId: string) => {
+    canvasRef.current?.panToSeat(seatId)
+  }, [])
+
   const [notFound, setNotFound] = useState(false)
   const [pendingPreset, setPendingPreset] = useState<TablePreset | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -347,11 +353,11 @@ export default function ProjectPage() {
       {/* 3-column layout */}
       <div className="flex min-h-0 flex-1">
         {/* Left — Guest list */}
-        <GuestListPanel />
+        <GuestListPanel onPanToSeat={handlePanToSeat} />
 
         {/* Center — Canvas */}
         <main className="min-w-0 flex-1">
-          <CanvasView />
+          <CanvasView ref={canvasRef} />
         </main>
 
         {/* Right — Inspector */}

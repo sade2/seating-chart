@@ -179,7 +179,7 @@ function GuestRow({ guest, isPending, onEdit, onDelete, onRowClick }: {
   return (
     <div
       className="group flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50"
-      style={{ backgroundColor: isPending ? '#fef3c7' : undefined, cursor: isAssigned ? 'default' : 'pointer' }}
+      style={{ backgroundColor: isPending ? '#fef3c7' : undefined, cursor: 'pointer' }}
       onClick={onRowClick}
     >
       {/* Status dot */}
@@ -210,13 +210,14 @@ type ModalState =
   | { type: 'edit'; guest: Guest }
   | { type: 'delete'; guest: Guest }
 
-export default function GuestListPanel() {
+export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: string) => void }) {
   const project = useProjectStore((s) => s.project)
   const addGuest = useProjectStore((s) => s.addGuest)
   const updateGuest = useProjectStore((s) => s.updateGuest)
   const deleteGuest = useProjectStore((s) => s.deleteGuest)
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
+  const setSelectedSeat = useProjectStore((s) => s.setSelectedSeat)
 
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
@@ -380,8 +381,13 @@ export default function GuestListPanel() {
                   onEdit={() => setModal({ type: 'edit', guest })}
                   onDelete={() => setModal({ type: 'delete', guest })}
                   onRowClick={() => {
-                    if (guest.seatId !== null) return
-                    setPendingGuest(pendingGuestId === guest.id ? null : guest.id)
+                    if (guest.seatId !== null) {
+                      setPendingGuest(null)
+                      setSelectedSeat(guest.seatId)
+                      onPanToSeat(guest.seatId)
+                    } else {
+                      setPendingGuest(pendingGuestId === guest.id ? null : guest.id)
+                    }
                   }}
                 />
               ))}

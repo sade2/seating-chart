@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
+import { getSeatPositions } from '../../lib/tableGeometry'
+import type { Table } from '../../types'
 import RoomBoundary from './RoomBoundary'
 import TableShape from './TableShape'
+import { getTableWarnings } from '../../lib/warnings'
+
+export interface CanvasViewHandle {
+  panToSeat: (seatId: string) => void
+}
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
@@ -14,7 +21,7 @@ type DragState =
   | { type: 'table'; tableId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
   | { type: 'rotate'; tableId: string; tableCenterScreen: Point; currentRotation: number }
 
-export default function CanvasView() {
+const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_props, ref) {
   const project = useProjectStore((s) => s.project)
   const selectedTableId = useProjectStore((s) => s.selectedTableId)
   const selectedSeatId = useProjectStore((s) => s.selectedSeatId)
@@ -37,6 +44,36 @@ export default function CanvasView() {
   useEffect(() => { zoomRef.current = zoom }, [zoom])
   useEffect(() => { panRef.current = pan }, [pan])
   useEffect(() => { dragRef.current = drag }, [drag])
+
+  // Imperative handle for external callers (e.g. pan to a seat from GuestListPanel)
+  useImperativeHandle(ref, () => ({
+    panToSeat(seatId: string) {
+      const proj = useProjectStore.getState().project
+      if (!proj) return
+      let foundTable: Table | null = null
+      let seatIndex = -1
+      for (const t of proj.tables) {
+        const idx = t.seats.findIndex((s) => s.id === seatId)
+        if (idx !== -1) { foundTable = t; seatIndex = idx; break }
+      }
+      if (!foundTable || seatIndex === -1) return
+      const pxPerFt = proj.room.pixelsPerFoot
+      const seatPositions = getSeatPositions(foundTable, pxPerFt)
+      const seatPos = seatPositions[seatIndex]
+      if (!seatPos) return
+      const rad = (foundTable.rotation * Math.PI) / 180
+      const worldX = foundTable.x * pxPerFt + seatPos.x * Math.cos(rad) - seatPos.y * Math.sin(rad)
+      const worldY = foundTable.y * pxPerFt + seatPos.x * Math.sin(rad) + seatPos.y * Math.cos(rad)
+      const svg = svgRef.current
+      if (!svg) return
+      const { width, height } = svg.getBoundingClientRect()
+      const currentZoom = zoomRef.current
+      setPan({
+        x: width / 2 - worldX * currentZoom,
+        y: height / 2 - worldY * currentZoom,
+      })
+    },
+  }), [])
 
   // Center room in viewport when project first loads
   useEffect(() => {
@@ -195,32 +232,36 @@ export default function CanvasView() {
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           <RoomBoundary room={project.room} />
 
-          {project.tables.map((table) => (
-            <TableShape
-              key={table.id}
-              table={table}
-              pixelsPerFoot={pixelsPerFoot}
-              zoom={zoom}
-              isSelected={selectedTableId === table.id}
-              selectedSeatId={selectedSeatId}
-              pendingGuestId={pendingGuestId}
-              guestNameMap={guestNameMap}
-              overridePos={
-                drag.type === 'table' && drag.tableId === table.id
-                  ? drag.currentPosFt
-                  : undefined
-              }
-              overrideRotation={
-                drag.type === 'rotate' && drag.tableId === table.id
-                  ? drag.currentRotation
-                  : undefined
-              }
-              onMouseDown={handleTableMouseDown}
-              onRotateHandleMouseDown={handleRotateHandleMouseDown}
-              onSeatClick={handleSeatClick}
-              onTableClick={handleTableClick}
-            />
-          ))}
+          {project.tables.map((table) => {
+            const warnings = getTableWarnings(table, project.room)
+            return (
+              <TableShape
+                key={table.id}
+                table={table}
+                pixelsPerFoot={pixelsPerFoot}
+                zoom={zoom}
+                isSelected={selectedTableId === table.id}
+                selectedSeatId={selectedSeatId}
+                pendingGuestId={pendingGuestId}
+                guestNameMap={guestNameMap}
+                warnings={warnings}
+                overridePos={
+                  drag.type === 'table' && drag.tableId === table.id
+                    ? drag.currentPosFt
+                    : undefined
+                }
+                overrideRotation={
+                  drag.type === 'rotate' && drag.tableId === table.id
+                    ? drag.currentRotation
+                    : undefined
+                }
+                onMouseDown={handleTableMouseDown}
+                onRotateHandleMouseDown={handleRotateHandleMouseDown}
+                onSeatClick={handleSeatClick}
+                onTableClick={handleTableClick}
+              />
+            )
+          })}
         </g>
       </svg>
 
@@ -256,7 +297,9 @@ export default function CanvasView() {
       setSelectedSeat(seatId)
     }
   }
-}
+})
+
+export default CanvasView
 
 // ── Scale bar ───────────────────────────────────────────────────────────────────
 
