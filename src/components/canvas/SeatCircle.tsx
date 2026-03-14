@@ -1,4 +1,4 @@
-import { SEAT_SCREEN_R } from '../../lib/tableGeometry'
+import { SEAT_SCREEN_R, SEAT_SCREEN_R_MIN, SEAT_SCREEN_R_MAX } from '../../lib/tableGeometry'
 import type { Seat } from '../../types'
 
 interface SeatCircleProps {
@@ -24,7 +24,9 @@ export default function SeatCircle({
   isDimmed = false,
   onClick,
 }: SeatCircleProps) {
-  const r = SEAT_SCREEN_R / zoom
+  // Clamp the screen-pixel radius, then convert to SVG local coordinates
+  const screenR = Math.max(SEAT_SCREEN_R_MIN, Math.min(SEAT_SCREEN_R_MAX, SEAT_SCREEN_R))
+  const r = screenR / zoom
   const sw = 1 / zoom
 
   const isOccupied = seat.guestId !== null
@@ -78,7 +80,7 @@ export default function SeatCircle({
           y={y}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize={7 / zoom}
+          fontSize={Math.round(screenR * 0.65) / zoom}
           fill="white"
           fontFamily="system-ui, sans-serif"
           fontWeight="600"

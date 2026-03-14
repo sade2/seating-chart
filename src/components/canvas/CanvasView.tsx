@@ -271,11 +271,7 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
 
   function handleTableClick(tableId: string) {
     if (pendingGuestId) return
-    if (selectedTableId === tableId) {
-      setSelectedTable(null)
-    } else {
-      setSelectedTable(tableId)
-    }
+    setSelectedTable(tableId)
   }
 
   function handleSeatClick(seatId: string) {

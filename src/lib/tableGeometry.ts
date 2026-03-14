@@ -5,7 +5,9 @@ const SEAT_GAP_FT = 0.15   // gap between table edge and seat center
 const LABEL_GAP_FT = 0.55  // gap below the seat row to the label baseline
 
 // Fixed visual constants (screen pixels)
-export const SEAT_SCREEN_R = 8       // seat circle radius in screen pixels
+export const SEAT_SCREEN_R = 12      // target seat radius in screen pixels
+export const SEAT_SCREEN_R_MIN = 7   // minimum screen radius (zoomed all the way in)
+export const SEAT_SCREEN_R_MAX = 18  // maximum screen radius (zoomed all the way out)
 export const HANDLE_SCREEN_R = 6     // rotation handle radius in screen pixels
 export const HANDLE_DIST_FT = 0.9   // distance above the table top edge to handle center
 

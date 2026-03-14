@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/projectStore'
 import type { Guest, Table, Seat } from '../../types'
 import Modal from '../ui/Modal'
 import { getTableWarnings } from '../../lib/warnings'
+import EditTableModal from '../modals/EditTableModal'
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
 
@@ -177,8 +178,12 @@ function TableInspector({ table, warnings = [] }: { table: Table; warnings?: str
         </button>
       </div>
 
-      {/* EditTableModal placeholder — wired in Prompt 5 */}
-      {editTableOpen && <div />}
+      {editTableOpen && (
+        <EditTableModal
+          table={table}
+          onClose={() => setEditTableOpen(false)}
+        />
+      )}
 
       {/* Unassign All */}
       {occupiedCount > 0 && (
@@ -276,22 +281,18 @@ function SeatInspector({ seat, tableLabel, tableId }: { seat: Seat; tableLabel: 
 
   return (
     <>
-      <div className="border-b border-slate-100 px-4 py-2">
+      {/* Prominent "back to table" link — replaces both the old back-link and the read-only Table section */}
+      <div className="border-b border-slate-100 px-4 py-3">
         <button
           onClick={() => setSelectedTable(tableId)}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600"
+          className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800"
         >
-          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 2L3 6l4 4" />
           </svg>
           {tableLabel}
         </button>
       </div>
-
-      <Section>
-        <SectionLabel>Table</SectionLabel>
-        <ReadOnlyField value={tableLabel} />
-      </Section>
 
       <Section>
         <SectionLabel>Seat</SectionLabel>
@@ -358,7 +359,7 @@ export default function InspectorPanel() {
       {/* Header */}
       <div className="border-b border-slate-100 px-4 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          {selectedTable ? 'Table' : selectedSeat ? 'Seat' : 'Inspector'}
+          {selectedTable ? 'Table' : selectedSeat ? seatTable!.label : 'Inspector'}
         </p>
       </div>
 

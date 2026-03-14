@@ -17,6 +17,9 @@ interface ProjectStore {
   rotateSeats: (tableId: string, direction: 'cw' | 'ccw') => Promise<void>
   unassignAllSeats: (tableId: string) => Promise<void>
 
+  // Table replace (for Edit Table modal)
+  replaceTable: (tableId: string, newTableData: Partial<Table>, guestUpdates: { guestId: string; seatId: string | null }[]) => Promise<void>
+
   // Guest mutations
   addGuest: (guest: Guest) => Promise<void>
   updateGuest: (id: string, changes: Partial<Guest>) => Promise<void>
@@ -164,6 +167,22 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       updatedAt: Date.now(),
     }
     set({ project: updated, selectedSeatId: null })
+    persist(updated)
+  },
+
+  replaceTable: async (tableId, newTableData, guestUpdates) => {
+    const { project } = get()
+    if (!project) return
+    const guestUpdateMap = new Map(guestUpdates.map((u) => [u.guestId, u.seatId]))
+    const updated: Project = {
+      ...project,
+      tables: project.tables.map((t) => (t.id === tableId ? { ...t, ...newTableData } : t)),
+      guests: project.guests.map((g) =>
+        guestUpdateMap.has(g.id) ? { ...g, seatId: guestUpdateMap.get(g.id)! } : g
+      ),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
     persist(updated)
   },
 
