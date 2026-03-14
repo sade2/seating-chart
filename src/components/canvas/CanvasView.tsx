@@ -230,7 +230,11 @@ export default function CanvasView() {
 
   function handleTableClick(tableId: string) {
     if (pendingGuestId) return
-    setSelectedTable(tableId)
+    if (selectedTableId === tableId) {
+      setSelectedTable(null)
+    } else {
+      setSelectedTable(tableId)
+    }
   }
 
   function handleSeatClick(seatId: string) {
@@ -246,7 +250,11 @@ export default function CanvasView() {
       }
       return
     }
-    setSelectedSeat(seatId)
+    if (selectedSeatId === seatId) {
+      setSelectedSeat(null)
+    } else {
+      setSelectedSeat(seatId)
+    }
   }
 }
 

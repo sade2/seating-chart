@@ -1,7 +1,6 @@
 import type { Table } from '../../types'
 import {
   getSeatPositions,
-  getLabelY,
   getHandleY,
   getTableHalfW,
   getTableHalfH,
@@ -47,7 +46,6 @@ export default function TableShape({
   const halfW = getTableHalfW(table, pixelsPerFoot)
   const halfH = getTableHalfH(table, pixelsPerFoot)
   const seatPositions = getSeatPositions(table, pixelsPerFoot)
-  const labelY = getLabelY(table, pixelsPerFoot)
   const handleY = getHandleY(table, pixelsPerFoot)
 
   const isRect = table.type === 'rectangular' || table.type === 'square'
@@ -131,10 +129,12 @@ export default function TableShape({
       {/* Table label */}
       <text
         x={0}
-        y={labelY}
+        y={0}
         textAnchor="middle"
-        fontSize={11 / zoom}
-        fill="#64748b"
+        dominantBaseline="central"
+        fontSize={13 / zoom}
+        fontWeight="600"
+        fill="#475569"
         fontFamily="system-ui, sans-serif"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >

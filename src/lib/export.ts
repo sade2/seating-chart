@@ -4,7 +4,6 @@ import {
   getSeatPositions,
   getTableHalfW,
   getTableHalfH,
-  getLabelY,
   SEAT_SCREEN_R,
 } from './tableGeometry'
 
@@ -46,7 +45,6 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
     const halfW = getTableHalfW(table, EXPORT_PPF)
     const halfH = getTableHalfH(table, EXPORT_PPF)
     const seatPositions = getSeatPositions(table, EXPORT_PPF)
-    const labelY = getLabelY(table, EXPORT_PPF)
 
     const body =
       table.type === 'round'
@@ -74,8 +72,8 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
       .join('')
 
     const label =
-      `<text x="0" y="${labelY}" text-anchor="middle" ` +
-      `font-size="11" fill="#64748b" font-family="Arial, sans-serif">` +
+      `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" ` +
+      `font-size="13" fill="#475569" font-family="Arial, sans-serif" font-weight="600">` +
       `${escapeXml(table.label)}</text>`
 
     return `<g transform="translate(${cx},${cy}) rotate(${table.rotation})">${body}${seatEls}${label}</g>`
