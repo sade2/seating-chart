@@ -41,6 +41,7 @@ export interface Guest {
   group?: string
   notes?: string
   seatId: string | null
+  plusOneOf?: string | null  // id of the invited guest; null/undefined for regular guests
 }
 
 // Table size presets with seat count recommendations

@@ -24,6 +24,7 @@ interface ProjectStore {
   addGuest: (guest: Guest) => Promise<void>
   updateGuest: (id: string, changes: Partial<Guest>) => Promise<void>
   deleteGuest: (id: string) => Promise<void>
+  deleteManyGuests: (ids: string[]) => Promise<void>
 
   // Project settings
   updateRoom: (changes: Partial<Room>) => Promise<void>
@@ -230,6 +231,23 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ),
           }))
         : project.tables,
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  deleteManyGuests: async (ids) => {
+    const { project } = get()
+    if (!project) return
+    const idSet = new Set(ids)
+    const updated: Project = {
+      ...project,
+      guests: project.guests.filter((g) => !idSet.has(g.id)),
+      tables: project.tables.map((t) => ({
+        ...t,
+        seats: t.seats.map((s) => (s.guestId && idSet.has(s.guestId) ? { ...s, guestId: null } : s)),
+      })),
       updatedAt: Date.now(),
     }
     set({ project: updated })
