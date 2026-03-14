@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { db } from '../db'
-import type { Project, Table, Guest } from '../types'
+import type { Project, Table, Guest, Room } from '../types'
 
 interface ProjectStore {
   project: Project | null
@@ -24,6 +24,10 @@ interface ProjectStore {
   addGuest: (guest: Guest) => Promise<void>
   updateGuest: (id: string, changes: Partial<Guest>) => Promise<void>
   deleteGuest: (id: string) => Promise<void>
+
+  // Project settings
+  updateRoom: (changes: Partial<Room>) => Promise<void>
+  updateProjectName: (name: string) => Promise<void>
 
   // Selection state
   selectedTableId: string | null
@@ -226,6 +230,30 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ),
           }))
         : project.tables,
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  updateRoom: async (changes) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      room: { ...project.room, ...changes },
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  updateProjectName: async (name) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      name,
       updatedAt: Date.now(),
     }
     set({ project: updated })
