@@ -125,6 +125,108 @@ export async function exportToPNG(project: Project): Promise<void> {
   a.click()
 }
 
+// ── Guest list exports ────────────────────────────────────────────────────────
+
+function triggerDownload(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function csvCell(value: string | null | undefined): string {
+  const s = value ?? ''
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  return s
+}
+
+function buildSeatLookup(project: Project): Record<string, { tableLabel: string; seatNumber: number }> {
+  const map: Record<string, { tableLabel: string; seatNumber: number }> = {}
+  for (const table of project.tables) {
+    for (const seat of table.seats) {
+      map[seat.id] = { tableLabel: table.label, seatNumber: seat.index + 1 }
+    }
+  }
+  return map
+}
+
+export function exportGuestsCSV(project: Project): void {
+  const seatLookup = buildSeatLookup(project)
+  const rows = ['name,group,notes,TableLabel,SeatNumber']
+  for (const g of project.guests) {
+    const info = g.seatId ? seatLookup[g.seatId] : undefined
+    rows.push(
+      [
+        csvCell(g.name),
+        csvCell(g.group),
+        csvCell(g.notes),
+        csvCell(info?.tableLabel ?? ''),
+        info ? String(info.seatNumber) : '',
+      ].join(',')
+    )
+  }
+  triggerDownload('guests.csv', rows.join('\n'), 'text/csv')
+}
+
+export function exportGuestsJSON(project: Project): void {
+  const seatLookup = buildSeatLookup(project)
+  const data = project.guests.map((g) => {
+    const info = g.seatId ? seatLookup[g.seatId] : undefined
+    return {
+      name: g.name,
+      group: g.group ?? null,
+      notes: g.notes ?? null,
+      table: info?.tableLabel ?? null,
+      seat: info?.seatNumber ?? null,
+    }
+  })
+  triggerDownload('guests.json', JSON.stringify(data, null, 2), 'application/json')
+}
+
+export function exportGuestsPlaintext(project: Project): void {
+  const seatLookup = buildSeatLookup(project)
+
+  // Group assigned guests by table label, then by seat number
+  const byTable = new Map<string, { seatNumber: number; name: string }[]>()
+  const unassigned: string[] = []
+
+  for (const g of project.guests) {
+    const info = g.seatId ? seatLookup[g.seatId] : undefined
+    if (info) {
+      const list = byTable.get(info.tableLabel) ?? []
+      list.push({ seatNumber: info.seatNumber, name: g.name })
+      byTable.set(info.tableLabel, list)
+    } else {
+      unassigned.push(g.name)
+    }
+  }
+
+  // Sort tables by label, seats by number within each table
+  const lines: string[] = []
+  for (const [label, seats] of [...byTable.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    lines.push(label)
+    for (const s of seats.sort((a, b) => a.seatNumber - b.seatNumber)) {
+      lines.push(`  Seat ${s.seatNumber}: ${s.name}`)
+    }
+    lines.push('')
+  }
+
+  if (unassigned.length > 0) {
+    lines.push('Unassigned')
+    for (const name of unassigned) lines.push(`  ${name}`)
+  }
+
+  // Remove trailing blank line if present
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+
+  triggerDownload('guests.txt', lines.join('\n'), 'text/plain')
+}
+
 export async function exportToPDF(project: Project): Promise<void> {
   const { svg, width, height } = buildExportSVG(project)
   const canvas = await svgToCanvas(svg, width, height)

@@ -8,7 +8,7 @@ import CanvasView, { type CanvasViewHandle } from '../components/canvas/CanvasVi
 import GuestListPanel from '../components/panels/GuestListPanel'
 import InspectorPanel from '../components/panels/InspectorPanel'
 import Modal from '../components/ui/Modal'
-import { exportToPNG, exportToPDF } from '../lib/export'
+import { exportToPNG, exportToPDF, exportGuestsCSV, exportGuestsJSON, exportGuestsPlaintext } from '../lib/export'
 import { repairProject } from '../lib/repairProject'
 import { RenameProjectModal, ResizeCanvasModal } from '../components/modals/ProjectSettingsModals'
 
@@ -141,9 +141,10 @@ function InsertMenu({ onSelectPreset }: { onSelectPreset: (p: TablePreset) => vo
 
 interface ExportMenuProps {
   onExport: (format: 'png' | 'pdf') => void
+  onExportGuests: (format: 'csv' | 'json' | 'txt') => void
 }
 
-function ExportMenu({ onExport }: ExportMenuProps) {
+function ExportMenu({ onExport, onExportGuests }: ExportMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -173,7 +174,7 @@ function ExportMenu({ onExport }: ExportMenuProps) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
+        <div className="absolute right-0 top-9 z-20 w-48 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
           <button
             onClick={() => { setOpen(false); onExport('png') }}
             className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
@@ -194,6 +195,44 @@ function ExportMenu({ onExport }: ExportMenuProps) {
               <path d="M5 9h6M5 12h4" />
             </svg>
             Export as PDF
+          </button>
+
+          <div className="my-1.5 border-t border-slate-100" />
+          <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Guest List
+          </p>
+
+          <button
+            onClick={() => { setOpen(false); onExportGuests('csv') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 1h7l3 3v11H3V1z" />
+              <path d="M10 1v3h3" />
+              <path d="M5 7h6M5 10h6M5 13h3" />
+            </svg>
+            Export as CSV
+          </button>
+          <button
+            onClick={() => { setOpen(false); onExportGuests('json') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 2C3.9 2 3 2.9 3 4v8c0 1.1.9 2 2 2" />
+              <path d="M11 2c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2" />
+              <path d="M7 6l-2 2 2 2M9 6l2 2-2 2" />
+            </svg>
+            Export as JSON
+          </button>
+          <button
+            onClick={() => { setOpen(false); onExportGuests('txt') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 1h10v14H3V1z" />
+              <path d="M5 5h6M5 8h6M5 11h4" />
+            </svg>
+            Export as Plaintext
           </button>
         </div>
       )}
@@ -321,6 +360,13 @@ export default function ProjectPage() {
     await addTable(table)
   }
 
+  const handleExportGuests = (format: 'csv' | 'json' | 'txt') => {
+    if (!project) return
+    if (format === 'csv') exportGuestsCSV(project)
+    else if (format === 'json') exportGuestsJSON(project)
+    else exportGuestsPlaintext(project)
+  }
+
   const handleExport = async (format: 'png' | 'pdf') => {
     if (!project) return
     if (project.tables.length === 0) {
@@ -376,7 +422,7 @@ export default function ProjectPage() {
 
         <div className="flex items-center gap-3">
           <InsertMenu onSelectPreset={setPendingPreset} />
-          <ExportMenu onExport={handleExport} />
+          <ExportMenu onExport={handleExport} onExportGuests={handleExportGuests} />
           <span className="text-xs text-slate-400">
             {project.room.widthFt} × {project.room.heightFt} ft
           </span>

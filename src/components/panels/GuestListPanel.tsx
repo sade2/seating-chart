@@ -119,7 +119,7 @@ function DeleteGuestModal({ guest, onClose, onConfirm }: {
 
 // ── Row overflow menu ─────────────────────────────────────────────────────────
 
-function GuestRowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function GuestRowMenu({ onEdit, onDelete, onUnassign }: { onEdit: () => void; onDelete: () => void; onUnassign?: () => void }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -146,13 +146,21 @@ function GuestRowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-10 w-28 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-7 z-10 w-36 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
           <button
             onClick={() => { setOpen(false); onEdit() }}
             className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
           >
             Edit
           </button>
+          {onUnassign && (
+            <button
+              onClick={() => { setOpen(false); onUnassign() }}
+              className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+            >
+              Unassign from seat
+            </button>
+          )}
           <button
             onClick={() => { setOpen(false); onDelete() }}
             className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
@@ -167,12 +175,13 @@ function GuestRowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
 
 // ── Guest row ─────────────────────────────────────────────────────────────────
 
-function GuestRow({ guest, isPending, assignment, onEdit, onDelete, onRowClick }: {
+function GuestRow({ guest, isPending, assignment, onEdit, onDelete, onUnassign, onRowClick }: {
   guest: Guest
   isPending: boolean
   assignment?: { tableLabel: string; seatNumber: number }
   onEdit: () => void
   onDelete: () => void
+  onUnassign?: () => void
   onRowClick: () => void
 }) {
   const isAssigned = guest.seatId !== null
@@ -206,7 +215,7 @@ function GuestRow({ guest, isPending, assignment, onEdit, onDelete, onRowClick }
       )}
 
       {/* Overflow menu */}
-      <GuestRowMenu onEdit={onEdit} onDelete={onDelete} />
+      <GuestRowMenu onEdit={onEdit} onDelete={onDelete} onUnassign={onUnassign} />
     </div>
   )
 }
@@ -228,6 +237,7 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
   const setSelectedSeat = useProjectStore((s) => s.setSelectedSeat)
+  const unassignSeat = useProjectStore((s) => s.unassignSeat)
 
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
@@ -363,6 +373,7 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
                   assignment={guest.seatId ? seatAssignmentMap[guest.seatId] : undefined}
                   onEdit={() => setModal({ type: 'edit', guest })}
                   onDelete={() => setModal({ type: 'delete', guest })}
+                  onUnassign={guest.seatId ? () => unassignSeat(guest.seatId!) : undefined}
                   onRowClick={() => {
                     if (guest.seatId !== null) {
                       setPendingGuest(null)
