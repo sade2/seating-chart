@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { db } from '../db'
-import type { Project, Table, Guest, Room } from '../types'
+import type { Project, Table, Guest, Room, TracedFloorPlan } from '../types'
 
 interface ProjectStore {
   project: Project | null
@@ -29,6 +29,11 @@ interface ProjectStore {
   // Project settings
   updateRoom: (changes: Partial<Room>) => Promise<void>
   updateProjectName: (name: string) => Promise<void>
+
+  // Floor plan
+  setFloorPlan: (floorPlan: TracedFloorPlan, widthFt: number, heightFt: number) => Promise<void>
+  removeFloorPlan: () => Promise<void>
+  updateFloorPlanOpacity: (opacity: number) => Promise<void>
 
   // Selection state
   selectedTableId: string | null
@@ -272,6 +277,46 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const updated: Project = {
       ...project,
       name,
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  setFloorPlan: async (floorPlan, widthFt, heightFt) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      room: { ...project.room, floorPlan, widthFt, heightFt },
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  removeFloorPlan: async () => {
+    const { project } = get()
+    if (!project) return
+    const { floorPlan: _removed, ...roomWithout } = project.room
+    const updated: Project = {
+      ...project,
+      room: roomWithout,
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  updateFloorPlanOpacity: async (opacity) => {
+    const { project } = get()
+    if (!project?.room.floorPlan) return
+    const updated: Project = {
+      ...project,
+      room: {
+        ...project.room,
+        floorPlan: { ...project.room.floorPlan, opacity },
+      },
       updatedAt: Date.now(),
     }
     set({ project: updated })

@@ -5,9 +5,14 @@ import type { Table } from '../../types'
 import RoomBoundary from './RoomBoundary'
 import TableShape from './TableShape'
 import { getTableWarnings } from '../../lib/warnings'
+import type { ContextMenuInfo } from './CanvasContextMenu'
 
 export interface CanvasViewHandle {
   panToSeat: (seatId: string) => void
+}
+
+interface CanvasViewProps {
+  onContextMenu?: (info: ContextMenuInfo) => void
 }
 
 const MIN_ZOOM = 0.25
@@ -20,7 +25,7 @@ type DragState =
   | { type: 'pan'; startMouse: Point; startPan: Point }
   | { type: 'table'; tableId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
 
-const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_props, ref) {
+const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView({ onContextMenu: onContextMenuProp }, ref) {
   const project = useProjectStore((s) => s.project)
   const selectedTableId = useProjectStore((s) => s.selectedTableId)
   const selectedSeatId = useProjectStore((s) => s.selectedSeatId)
@@ -113,6 +118,52 @@ const CanvasView = forwardRef<CanvasViewHandle, object>(function CanvasView(_pro
     svg.addEventListener('wheel', handleWheel, { passive: false })
     return () => svg.removeEventListener('wheel', handleWheel)
   }, [handleWheel])
+
+  // Keep a stable ref to the onContextMenu prop so the native listener closure never goes stale
+  const onContextMenuPropRef = useRef(onContextMenuProp)
+  useEffect(() => { onContextMenuPropRef.current = onContextMenuProp }, [onContextMenuProp])
+
+  // Single native contextmenu listener on the SVG — more reliable than React
+  // synthetic onContextMenu on SVG children, which browsers don't bubble consistently.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const handler = (e: MouseEvent) => {
+      e.preventDefault()
+      const store = useProjectStore.getState()
+      store.setPendingGuest(null)
+      store.setSelectedTable(null)
+      store.setSelectedSeat(null)
+
+      if (!onContextMenuPropRef.current) return
+
+      const proj = store.project
+      if (!proj) return
+
+      // Convert screen coords to canvas world coords (feet)
+      const rect = svg.getBoundingClientRect()
+      const worldX = (e.clientX - rect.left - panRef.current.x) / (zoomRef.current * proj.room.pixelsPerFoot)
+      const worldY = (e.clientY - rect.top - panRef.current.y) / (zoomRef.current * proj.room.pixelsPerFoot)
+
+      // Walk up from event target to find a seat or table via data attributes
+      const el = e.target as Element
+      const seatEl = el.closest('[data-seat-id]')
+      const tableEl = el.closest('[data-table-id]')
+
+      let target: ContextMenuInfo['target']
+      if (seatEl) {
+        target = { type: 'seat', seatId: seatEl.getAttribute('data-seat-id')! }
+      } else if (tableEl) {
+        target = { type: 'table', tableId: tableEl.getAttribute('data-table-id')! }
+      } else {
+        target = { type: 'canvas' }
+      }
+
+      onContextMenuPropRef.current({ screenX: e.clientX, screenY: e.clientY, worldX, worldY, target })
+    }
+    svg.addEventListener('contextmenu', handler)
+    return () => svg.removeEventListener('contextmenu', handler)
+  }, []) // empty deps — uses refs for all dynamic values
 
   // seatId → guest name map for rendering initials
   const guestNameMap = useMemo<Record<string, string>>(() => {

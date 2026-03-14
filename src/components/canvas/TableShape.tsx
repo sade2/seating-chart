@@ -81,7 +81,7 @@ export default function TableShape({
         </>
       )}
 
-      {/* Table body */}
+      {/* Table body — data-table-id enables contextmenu hit-testing via closest() */}
       {table.type === 'round' ? (
         <circle
           r={halfW}
@@ -90,6 +90,7 @@ export default function TableShape({
           strokeWidth={2 / zoom}
           filter={warnings.length > 0 ? `url(#warn-${table.id})` : undefined}
           style={{ cursor: 'move' }}
+          data-table-id={table.id}
           onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, table.id) }}
           onClick={(e) => { e.stopPropagation(); onTableClick(table.id) }}
         />
@@ -105,6 +106,7 @@ export default function TableShape({
           strokeWidth={2 / zoom}
           filter={warnings.length > 0 ? `url(#warn-${table.id})` : undefined}
           style={{ cursor: 'move' }}
+          data-table-id={table.id}
           onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, table.id) }}
           onClick={(e) => { e.stopPropagation(); onTableClick(table.id) }}
         />

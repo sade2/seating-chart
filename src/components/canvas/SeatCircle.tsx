@@ -51,6 +51,7 @@ export default function SeatCircle({
 
   return (
     <g
+      data-seat-id={seat.id}
       style={{
         cursor: onClick ? 'pointer' : 'default',
         opacity: isDimmed ? 0.35 : 1,

@@ -4,6 +4,7 @@ import type { Guest, Table, Seat } from '../../types'
 import Modal from '../ui/Modal'
 import { getTableWarnings } from '../../lib/warnings'
 import EditTableModal from '../modals/EditTableModal'
+import FloorPlanImportModal from '../modals/FloorPlanImportModal'
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
 
@@ -23,18 +24,80 @@ function ReadOnlyField({ value }: { value: string }) {
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-function EmptyInspector({ room }: { room: { widthFt: number; heightFt: number } }) {
+function EmptyInspector({ room }: { room: { widthFt: number; heightFt: number; floorPlan?: { opacity: number } } }) {
+  const updateFloorPlanOpacity = useProjectStore((s) => s.updateFloorPlanOpacity)
+  const removeFloorPlan = useProjectStore((s) => s.removeFloorPlan)
+  const [floorPlanOpen, setFloorPlanOpen] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
   return (
     <>
       <Section>
         <SectionLabel>Room</SectionLabel>
         <ReadOnlyField value={`${room.widthFt} × ${room.heightFt} ft`} />
       </Section>
+
+      {room.floorPlan ? (
+        <Section>
+          <SectionLabel>Floor Plan</SectionLabel>
+          <div className="space-y-2">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-xs text-slate-500">Opacity</span>
+                <span className="text-xs text-slate-400">{Math.round(room.floorPlan.opacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={10} max={100} step={5}
+                value={Math.round(room.floorPlan.opacity * 100)}
+                onChange={(e) => updateFloorPlanOpacity(Number(e.target.value) / 100)}
+                className="w-full"
+              />
+            </div>
+            {!confirmRemove ? (
+              <button
+                onClick={() => setConfirmRemove(true)}
+                className="text-xs text-slate-400 underline hover:text-red-500"
+              >
+                Remove Floor Plan
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-xs text-slate-500">Remove?</span>
+                <button
+                  onClick={() => setConfirmRemove(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { removeFloorPlan(); setConfirmRemove(false) }}
+                  className="text-xs text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+        </Section>
+      ) : (
+        <Section>
+          <button
+            onClick={() => setFloorPlanOpen(true)}
+            className="w-full rounded-lg border border-dashed border-slate-200 py-2 text-xs font-medium text-slate-400 hover:border-indigo-300 hover:text-indigo-500"
+          >
+            + Import Floor Plan
+          </button>
+        </Section>
+      )}
+
       <div className="flex flex-1 items-center justify-center px-4 text-center">
         <p className="text-xs leading-relaxed text-slate-300">
           Click a table or seat<br />to inspect it
         </p>
       </div>
+
+      {floorPlanOpen && <FloorPlanImportModal onClose={() => setFloorPlanOpen(false)} />}
     </>
   )
 }

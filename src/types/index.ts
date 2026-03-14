@@ -8,10 +8,20 @@ export interface Project {
   guests: Guest[]
 }
 
+export interface TracedFloorPlan {
+  paths: { d: string }[]
+  viewBox: { width: number; height: number }
+  /** The <g transform="..."> from potrace output — maps path coords to image-pixel space */
+  svgTransform: string
+  scaleFt: number   // feet represented by image width
+  opacity: number   // 0.1–1
+}
+
 export interface Room {
   widthFt: number
   heightFt: number
   pixelsPerFoot: number
+  floorPlan?: TracedFloorPlan
 }
 
 export type TableType = 'round' | 'rectangular' | 'square'

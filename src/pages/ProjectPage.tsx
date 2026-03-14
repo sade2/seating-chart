@@ -8,7 +8,11 @@ import InspectorPanel from '../components/panels/InspectorPanel'
 import { exportToPNG, exportToPDF, exportGuestsCSV, exportGuestsJSON, exportGuestsPlaintext } from '../lib/export'
 import { repairProject } from '../lib/repairProject'
 import { RenameProjectModal, ResizeCanvasModal } from '../components/modals/ProjectSettingsModals'
+import FloorPlanImportModal from '../components/modals/FloorPlanImportModal'
 import CreateTableModal from '../components/modals/CreateTableModal'
+import AddGuestModal from '../components/modals/AddGuestModal'
+import EditTableModal from '../components/modals/EditTableModal'
+import CanvasContextMenu, { type ContextMenuInfo } from '../components/canvas/CanvasContextMenu'
 
 // ── Export Menu ───────────────────────────────────────────────────────────────
 
@@ -115,7 +119,7 @@ function ExportMenu({ onExport, onExportGuests }: ExportMenuProps) {
 
 // ── Settings Menu ─────────────────────────────────────────────────────────────
 
-function SettingsMenu({ onSelect }: { onSelect: (item: 'rename' | 'resize') => void }) {
+function SettingsMenu({ onSelect }: { onSelect: (item: 'rename' | 'resize' | 'floorplan') => void }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -154,6 +158,12 @@ function SettingsMenu({ onSelect }: { onSelect: (item: 'rename' | 'resize') => v
           >
             Resize Canvas
           </button>
+          <button
+            onClick={() => { setOpen(false); onSelect('floorplan') }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Import Floor Plan
+          </button>
         </div>
       )}
     </div>
@@ -179,10 +189,14 @@ export default function ProjectPage() {
 
   const [notFound, setNotFound] = useState(false)
   const [createTableOpen, setCreateTableOpen] = useState(false)
+  const [createTableInitPos, setCreateTableInitPos] = useState<{ x: number; y: number } | undefined>()
+  const [addGuestOpen, setAddGuestOpen] = useState(false)
+  const [editTableId, setEditTableId] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenuInfo | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [exportToast, setExportToast] = useState<string | null>(null)
   const [repairMessages, setRepairMessages] = useState<string[]>([])
-  const [settingsModal, setSettingsModal] = useState<null | 'rename' | 'resize'>(null)
+  const [settingsModal, setSettingsModal] = useState<null | 'rename' | 'resize' | 'floorplan'>(null)
 
   // Escape key cancels assignment mode
   useEffect(() => {
@@ -266,7 +280,7 @@ export default function ProjectPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setCreateTableOpen(true)}
+            onClick={() => { setCreateTableInitPos(undefined); setCreateTableOpen(true) }}
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
@@ -336,7 +350,7 @@ export default function ProjectPage() {
 
         {/* Center — Canvas */}
         <main className="min-w-0 flex-1">
-          <CanvasView ref={canvasRef} />
+          <CanvasView ref={canvasRef} onContextMenu={setContextMenu} />
         </main>
 
         {/* Right — Inspector */}
@@ -345,7 +359,47 @@ export default function ProjectPage() {
 
       {/* Create table modal */}
       {createTableOpen && (
-        <CreateTableModal onClose={() => setCreateTableOpen(false)} />
+        <CreateTableModal
+          onClose={() => { setCreateTableOpen(false); setCreateTableInitPos(undefined) }}
+          position={createTableInitPos}
+        />
+      )}
+
+      {/* Add guest modal (triggered from context menu) */}
+      {addGuestOpen && (
+        <AddGuestModal
+          onClose={() => setAddGuestOpen(false)}
+          onAdded={() => setAddGuestOpen(false)}
+        />
+      )}
+
+      {/* Edit table modal (triggered from context menu) */}
+      {editTableId && (() => {
+        const table = project.tables.find((t) => t.id === editTableId)
+        return table ? (
+          <EditTableModal table={table} onClose={() => setEditTableId(null)} />
+        ) : null
+      })()}
+
+      {/* Canvas context menu */}
+      {contextMenu && (
+        <CanvasContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+          onNewTable={(worldX, worldY) => {
+            setContextMenu(null)
+            setCreateTableInitPos({ x: worldX, y: worldY })
+            setCreateTableOpen(true)
+          }}
+          onNewGuest={() => {
+            setContextMenu(null)
+            setAddGuestOpen(true)
+          }}
+          onEditTable={(tableId) => {
+            setContextMenu(null)
+            setEditTableId(tableId)
+          }}
+        />
       )}
 
       {/* Export loading overlay */}
@@ -374,6 +428,9 @@ export default function ProjectPage() {
       )}
       {settingsModal === 'resize' && (
         <ResizeCanvasModal onClose={() => setSettingsModal(null)} />
+      )}
+      {settingsModal === 'floorplan' && (
+        <FloorPlanImportModal onClose={() => setSettingsModal(null)} />
       )}
     </div>
   )

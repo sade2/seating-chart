@@ -85,11 +85,20 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
     `<rect x="${PAD}" y="${PAD}" width="${room.widthFt * EXPORT_PPF}" height="${room.heightFt * EXPORT_PPF}" ` +
     `fill="white" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="10 5"/>`
 
+  const roomW = room.widthFt * EXPORT_PPF
+  const floorPlanEl = room.floorPlan
+    ? `<g transform="translate(${PAD},${PAD}) scale(${roomW / room.floorPlan.viewBox.width})" opacity="${room.floorPlan.opacity}" pointer-events="none">` +
+      `<g transform="${room.floorPlan.svgTransform}">` +
+      room.floorPlan.paths.map((p) => `<path d="${p.d}" fill="#374151" stroke="none"/>`).join('') +
+      `</g></g>`
+    : ''
+
   const svg =
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
     `<rect width="${W}" height="${H}" fill="#f1f5f9"/>` +
     roomRect +
+    floorPlanEl +
     tableEls.join('') +
     `</svg>`
 
