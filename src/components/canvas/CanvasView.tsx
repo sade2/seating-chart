@@ -18,9 +18,12 @@ export default function CanvasView() {
   const project = useProjectStore((s) => s.project)
   const selectedTableId = useProjectStore((s) => s.selectedTableId)
   const selectedSeatId = useProjectStore((s) => s.selectedSeatId)
+  const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const updateTable = useProjectStore((s) => s.updateTable)
   const setSelectedTable = useProjectStore((s) => s.setSelectedTable)
   const setSelectedSeat = useProjectStore((s) => s.setSelectedSeat)
+  const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
+  const assignSeat = useProjectStore((s) => s.assignSeat)
 
   const svgRef = useRef<SVGSVGElement>(null)
   const [zoom, setZoom] = useState(1)
@@ -89,6 +92,7 @@ export default function CanvasView() {
 
   const handleBgMouseDown = (e: React.MouseEvent<SVGRectElement>) => {
     if (e.button !== 0) return
+    setPendingGuest(null)
     setSelectedTable(null)
     setDrag({
       type: 'pan',
@@ -199,6 +203,7 @@ export default function CanvasView() {
               zoom={zoom}
               isSelected={selectedTableId === table.id}
               selectedSeatId={selectedSeatId}
+              pendingGuestId={pendingGuestId}
               guestNameMap={guestNameMap}
               overridePos={
                 drag.type === 'table' && drag.tableId === table.id
@@ -224,10 +229,23 @@ export default function CanvasView() {
   )
 
   function handleTableClick(tableId: string) {
+    if (pendingGuestId) return
     setSelectedTable(tableId)
   }
 
   function handleSeatClick(seatId: string) {
+    if (pendingGuestId) {
+      // Find the seat — only assign if empty
+      for (const t of project!.tables) {
+        const seat = t.seats.find((s) => s.id === seatId)
+        if (seat && seat.guestId === null) {
+          assignSeat(seatId, pendingGuestId)
+        }
+        // occupied seats do nothing in assignment mode
+        if (seat) break
+      }
+      return
+    }
     setSelectedSeat(seatId)
   }
 }

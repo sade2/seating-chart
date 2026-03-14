@@ -12,6 +12,7 @@ interface ProjectStore {
   deleteTable: (id: string) => Promise<void>
 
   // Seat assignment
+  assignSeat: (seatId: string, guestId: string) => Promise<void>
   unassignSeat: (seatId: string) => Promise<void>
 
   // Guest mutations
@@ -79,6 +80,22 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       updatedAt: Date.now(),
     }
     set({ project: updated, selectedTableId: null, selectedSeatId: null })
+    persist(updated)
+  },
+
+  assignSeat: async (seatId, guestId) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      tables: project.tables.map((t) => ({
+        ...t,
+        seats: t.seats.map((s) => (s.id === seatId ? { ...s, guestId } : s)),
+      })),
+      guests: project.guests.map((g) => (g.id === guestId ? { ...g, seatId } : g)),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated, pendingGuestId: null })
     persist(updated)
   },
 

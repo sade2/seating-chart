@@ -15,6 +15,7 @@ interface TableShapeProps {
   zoom: number
   isSelected: boolean
   selectedSeatId: string | null
+  pendingGuestId: string | null
   guestNameMap: Record<string, string>  // seatId → guest name
   overridePos?: { x: number; y: number }
   overrideRotation?: number
@@ -30,6 +31,7 @@ export default function TableShape({
   zoom,
   isSelected,
   selectedSeatId,
+  pendingGuestId,
   guestNameMap,
   overridePos,
   overrideRotation,
@@ -109,6 +111,7 @@ export default function TableShape({
       {/* Seats */}
       {seatPositions.map((pos, i) => {
         const seat = table.seats[i]
+        const isOccupied = seat.guestId !== null
         return (
           <SeatCircle
             key={seat.id}
@@ -116,8 +119,10 @@ export default function TableShape({
             x={pos.x}
             y={pos.y}
             zoom={zoom}
-            guestName={seat.guestId ? guestNameMap[seat.id] : undefined}
+            guestName={isOccupied ? guestNameMap[seat.id] : undefined}
             isSelected={selectedSeatId === seat.id}
+            isPending={!!pendingGuestId && !isOccupied}
+            isDimmed={!!pendingGuestId && isOccupied}
             onClick={onSeatClick}
           />
         )

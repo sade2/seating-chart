@@ -167,15 +167,21 @@ function GuestRowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
 
 // ── Guest row ─────────────────────────────────────────────────────────────────
 
-function GuestRow({ guest, onEdit, onDelete }: {
+function GuestRow({ guest, isPending, onEdit, onDelete, onRowClick }: {
   guest: Guest
+  isPending: boolean
   onEdit: () => void
   onDelete: () => void
+  onRowClick: () => void
 }) {
   const isAssigned = guest.seatId !== null
 
   return (
-    <div className="group flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50">
+    <div
+      className="group flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50"
+      style={{ backgroundColor: isPending ? '#fef3c7' : undefined, cursor: isAssigned ? 'default' : 'pointer' }}
+      onClick={onRowClick}
+    >
       {/* Status dot */}
       <span
         className={`h-2 w-2 flex-shrink-0 rounded-full ${isAssigned ? 'bg-green-400' : 'bg-red-400'}`}
@@ -209,6 +215,8 @@ export default function GuestListPanel() {
   const addGuest = useProjectStore((s) => s.addGuest)
   const updateGuest = useProjectStore((s) => s.updateGuest)
   const deleteGuest = useProjectStore((s) => s.deleteGuest)
+  const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
+  const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
 
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
@@ -368,8 +376,13 @@ export default function GuestListPanel() {
                 <GuestRow
                   key={guest.id}
                   guest={guest}
+                  isPending={pendingGuestId === guest.id}
                   onEdit={() => setModal({ type: 'edit', guest })}
                   onDelete={() => setModal({ type: 'delete', guest })}
+                  onRowClick={() => {
+                    if (guest.seatId !== null) return
+                    setPendingGuest(pendingGuestId === guest.id ? null : guest.id)
+                  }}
                 />
               ))}
             </div>
