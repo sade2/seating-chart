@@ -14,6 +14,8 @@ interface ProjectStore {
   // Seat assignment
   assignSeat: (seatId: string, guestId: string) => Promise<void>
   unassignSeat: (seatId: string) => Promise<void>
+  rotateSeats: (tableId: string, direction: 'cw' | 'ccw') => Promise<void>
+  unassignAllSeats: (tableId: string) => Promise<void>
 
   // Guest mutations
   addGuest: (guest: Guest) => Promise<void>
@@ -96,6 +98,56 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       updatedAt: Date.now(),
     }
     set({ project: updated, pendingGuestId: null })
+    persist(updated)
+  },
+
+  rotateSeats: async (tableId, direction) => {
+    const { project } = get()
+    if (!project) return
+    const table = project.tables.find((t) => t.id === tableId)
+    if (!table || table.seats.every((s) => s.guestId === null)) return
+    const n = table.seats.length
+    const newSeats = table.seats.map((seat, i) => {
+      const sourceIdx = direction === 'cw' ? (i - 1 + n) % n : (i + 1) % n
+      return { ...seat, guestId: table.seats[sourceIdx].guestId }
+    })
+    // Build guestId → new seatId map so guest.seatId links stay correct
+    const guestSeatMap = new Map<string, string>()
+    for (const seat of newSeats) {
+      if (seat.guestId) guestSeatMap.set(seat.guestId, seat.id)
+    }
+    const updated: Project = {
+      ...project,
+      tables: project.tables.map((t) => (t.id === tableId ? { ...t, seats: newSeats } : t)),
+      guests: project.guests.map((g) => {
+        const newSeatId = guestSeatMap.get(g.id)
+        return newSeatId !== undefined ? { ...g, seatId: newSeatId } : g
+      }),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  unassignAllSeats: async (tableId) => {
+    const { project } = get()
+    if (!project) return
+    const table = project.tables.find((t) => t.id === tableId)
+    if (!table) return
+    const seatIds = new Set(table.seats.map((s) => s.id))
+    const updated: Project = {
+      ...project,
+      tables: project.tables.map((t) =>
+        t.id === tableId
+          ? { ...t, seats: t.seats.map((s) => ({ ...s, guestId: null })) }
+          : t
+      ),
+      guests: project.guests.map((g) =>
+        g.seatId && seatIds.has(g.seatId) ? { ...g, seatId: null } : g
+      ),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
     persist(updated)
   },
 

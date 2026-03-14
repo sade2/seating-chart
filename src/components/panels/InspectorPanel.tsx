@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
-import type { Table, Seat } from '../../types'
+import type { Guest, Table, Seat } from '../../types'
+import Modal from '../ui/Modal'
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
 
@@ -8,7 +9,7 @@ function Section({ children }: { children: React.ReactNode }) {
   return <div className="border-b border-slate-100 px-4 py-4 last:border-b-0">{children}</div>
 }
 
-function Label({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{children}</p>
 }
 
@@ -24,7 +25,7 @@ function EmptyInspector({ room }: { room: { widthFt: number; heightFt: number } 
   return (
     <>
       <Section>
-        <Label>Room</Label>
+        <SectionLabel>Room</SectionLabel>
         <ReadOnlyField value={`${room.widthFt} × ${room.heightFt} ft`} />
       </Section>
       <div className="flex flex-1 items-center justify-center px-4 text-center">
@@ -38,21 +39,30 @@ function EmptyInspector({ room }: { room: { widthFt: number; heightFt: number } 
 
 // ── Table inspector ────────────────────────────────────────────────────────────
 
-function TableInspector({ table }: { table: Table }) {
+function TableInspector({ table, warnings = [] }: { table: Table; warnings?: string[] }) {
+  const project = useProjectStore((s) => s.project)
   const updateTable = useProjectStore((s) => s.updateTable)
   const deleteTable = useProjectStore((s) => s.deleteTable)
+  const unassignSeat = useProjectStore((s) => s.unassignSeat)
+  const rotateSeats = useProjectStore((s) => s.rotateSeats)
+  const unassignAllSeats = useProjectStore((s) => s.unassignAllSeats)
   const setSelectedTable = useProjectStore((s) => s.setSelectedTable)
+  const setSelectedSeat = useProjectStore((s) => s.setSelectedSeat)
 
   const [label, setLabel] = useState(table.label)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmUnassignAll, setConfirmUnassignAll] = useState(false)
+  const [editTableOpen, setEditTableOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  if (!project) return null
+
+  const guestMap: Record<string, Guest> = Object.fromEntries(
+    project.guests.map((g) => [g.id, g])
+  )
+
+  const sortedSeats = [...table.seats].sort((a, b) => a.index - b.index)
   const occupiedCount = table.seats.filter((s) => s.guestId !== null).length
-  const typeLabel = table.type.charAt(0).toUpperCase() + table.type.slice(1)
-  const sizeLabel =
-    table.type === 'rectangular'
-      ? `${table.sizeFt} × ${table.widthFt ?? 2.5} ft`
-      : `${table.sizeFt} ft`
 
   const handleLabelBlur = () => {
     const trimmed = label.trim()
@@ -65,10 +75,25 @@ function TableInspector({ table }: { table: Table }) {
     setSelectedTable(null)
   }
 
+  const handleUnassignAll = () => {
+    unassignAllSeats(table.id)
+    setConfirmUnassignAll(false)
+  }
+
   return (
     <>
+      {/* Warning banner */}
+      {warnings.length > 0 && (
+        <div className="mx-4 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          {warnings.map((w, i) => (
+            <p key={i} className="text-xs text-amber-700">⚠ {w}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Label */}
       <Section>
-        <Label>Label</Label>
+        <SectionLabel>Label</SectionLabel>
         <input
           ref={inputRef}
           value={label}
@@ -79,22 +104,94 @@ function TableInspector({ table }: { table: Table }) {
         />
       </Section>
 
+      {/* Guests section */}
       <Section>
-        <Label>Type</Label>
-        <ReadOnlyField value={typeLabel} />
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Guests</p>
+          <span className="text-[11px] text-slate-400">{occupiedCount} / {table.seats.length} seated</span>
+        </div>
+        <div className="max-h-44 overflow-y-auto -mx-1 px-1">
+          {sortedSeats.map((seat) => {
+            const guest: Guest | undefined = seat.guestId ? guestMap[seat.guestId] : undefined
+            return (
+              <div key={seat.id} className="flex items-center gap-2 py-1.5">
+                {guest ? (
+                  <>
+                    <button
+                      onClick={() => setSelectedSeat(seat.id)}
+                      className="min-w-0 flex-1 truncate text-left text-sm text-slate-800 hover:text-indigo-600"
+                    >
+                      {guest.name}
+                    </button>
+                    <button
+                      onClick={() => unassignSeat(seat.id)}
+                      className="flex-shrink-0 text-xs text-slate-400 hover:text-red-600"
+                    >
+                      Unassign
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-300">Empty</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </Section>
 
-      <Section>
-        <Label>Size</Label>
-        <ReadOnlyField value={sizeLabel} />
-      </Section>
+      {/* Rotate guests */}
+      {occupiedCount > 0 && (
+        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+          <span className="flex-1 text-xs text-slate-400">Rotate guests</span>
+          <button
+            onClick={() => rotateSeats(table.id, 'ccw')}
+            title="Rotate counterclockwise"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 8a4 4 0 1 1-1.17-2.83" />
+              <path d="M12 2.5V6h-3.5" />
+            </svg>
+          </button>
+          <button
+            onClick={() => rotateSeats(table.id, 'cw')}
+            title="Rotate clockwise"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 8a4 4 0 1 0 1.17-2.83" />
+              <path d="M4 2.5V6h3.5" />
+            </svg>
+          </button>
+        </div>
+      )}
 
-      <Section>
-        <Label>Seats</Label>
-        <ReadOnlyField value={`${table.seats.length} total · ${occupiedCount} occupied`} />
-      </Section>
+      {/* Edit Table */}
+      <div className="border-b border-slate-100 px-4 py-3">
+        <button
+          onClick={() => setEditTableOpen(true)}
+          className="w-full rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Edit Table
+        </button>
+      </div>
 
-      {/* Delete */}
+      {/* EditTableModal placeholder — wired in Prompt 5 */}
+      {editTableOpen && <div />}
+
+      {/* Unassign All */}
+      {occupiedCount > 0 && (
+        <div className="border-b border-slate-100 px-4 py-2">
+          <button
+            onClick={() => setConfirmUnassignAll(true)}
+            className="text-xs text-slate-400 underline hover:text-red-500"
+          >
+            Unassign all guests
+          </button>
+        </div>
+      )}
+
+      {/* Delete Table */}
       <div className="mt-auto border-t border-slate-100 px-4 py-4">
         {!confirmDelete ? (
           <button
@@ -128,6 +225,34 @@ function TableInspector({ table }: { table: Table }) {
           </div>
         )}
       </div>
+
+      {/* Unassign All confirmation modal */}
+      {confirmUnassignAll && (
+        <Modal
+          title={`Unassign all guests from ${table.label}?`}
+          onClose={() => setConfirmUnassignAll(false)}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              {occupiedCount} guest{occupiedCount !== 1 ? 's' : ''} will be unassigned.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmUnassignAll(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUnassignAll}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Unassign All
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   )
 }
@@ -150,12 +275,12 @@ function SeatInspector({ seat, tableLabel }: { seat: Seat; tableLabel: string })
   return (
     <>
       <Section>
-        <Label>Table</Label>
+        <SectionLabel>Table</SectionLabel>
         <ReadOnlyField value={tableLabel} />
       </Section>
 
       <Section>
-        <Label>Seat</Label>
+        <SectionLabel>Seat</SectionLabel>
         {guest ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2">
