@@ -167,9 +167,10 @@ function GuestRowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
 
 // ── Guest row ─────────────────────────────────────────────────────────────────
 
-function GuestRow({ guest, isPending, onEdit, onDelete, onRowClick }: {
+function GuestRow({ guest, isPending, assignment, onEdit, onDelete, onRowClick }: {
   guest: Guest
   isPending: boolean
+  assignment?: { tableLabel: string; seatNumber: number }
   onEdit: () => void
   onDelete: () => void
   onRowClick: () => void
@@ -195,6 +196,14 @@ function GuestRow({ guest, isPending, onEdit, onDelete, onRowClick }: {
           <p className="truncate text-xs text-slate-400">{guest.group}</p>
         )}
       </div>
+
+      {/* Assignment badge */}
+      {assignment && (
+        <div className="flex-shrink-0 text-right">
+          <p className="text-xs font-medium leading-tight text-slate-600">{assignment.tableLabel}</p>
+          <p className="text-[10px] leading-tight text-slate-400">Seat {assignment.seatNumber}</p>
+        </div>
+      )}
 
       {/* Overflow menu */}
       <GuestRowMenu onEdit={onEdit} onDelete={onDelete} />
@@ -228,6 +237,14 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
 
   const guests = project.guests
   const assignedCount = guests.filter((g) => g.seatId !== null).length
+
+  // Build seatId → { tableLabel, seatNumber } for badge display
+  const seatAssignmentMap: Record<string, { tableLabel: string; seatNumber: number }> = {}
+  for (const table of project.tables) {
+    for (const seat of table.seats) {
+      seatAssignmentMap[seat.id] = { tableLabel: table.label, seatNumber: seat.index + 1 }
+    }
+  }
 
   const filtered = search.trim()
     ? guests.filter((g) => {
@@ -343,6 +360,7 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
                   key={guest.id}
                   guest={guest}
                   isPending={pendingGuestId === guest.id}
+                  assignment={guest.seatId ? seatAssignmentMap[guest.seatId] : undefined}
                   onEdit={() => setModal({ type: 'edit', guest })}
                   onDelete={() => setModal({ type: 'delete', guest })}
                   onRowClick={() => {
