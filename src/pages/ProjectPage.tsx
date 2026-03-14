@@ -8,6 +8,7 @@ import CanvasView from '../components/canvas/CanvasView'
 import GuestListPanel from '../components/panels/GuestListPanel'
 import InspectorPanel from '../components/panels/InspectorPanel'
 import Modal from '../components/ui/Modal'
+import { exportToPNG, exportToPDF } from '../lib/export'
 
 // ── Seat Count Modal ──────────────────────────────────────────────────────────
 
@@ -134,6 +135,70 @@ function InsertMenu({ onSelectPreset }: { onSelectPreset: (p: TablePreset) => vo
   )
 }
 
+// ── Export Menu ───────────────────────────────────────────────────────────────
+
+interface ExportMenuProps {
+  onExport: (format: 'png' | 'pdf') => void
+}
+
+function ExportMenu({ onExport }: ExportMenuProps) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 1v8M4 6l3 3 3-3" />
+          <path d="M1 10v1.5A1.5 1.5 0 002.5 13h9a1.5 1.5 0 001.5-1.5V10" />
+        </svg>
+        Export
+        <svg className="h-3 w-3 text-slate-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 4l4 4 4-4" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
+          <button
+            onClick={() => { setOpen(false); onExport('png') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="1" width="14" height="14" rx="2"/>
+              <path d="M1 11l3-3 2 2 4-4 5 5" />
+            </svg>
+            Export as PNG
+          </button>
+          <button
+            onClick={() => { setOpen(false); onExport('pdf') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 1h7l3 3v11H3V1z" />
+              <path d="M10 1v3h3" />
+              <path d="M5 9h6M5 12h4" />
+            </svg>
+            Export as PDF
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Project Page ──────────────────────────────────────────────────────────────
 
 export default function ProjectPage() {
@@ -148,6 +213,8 @@ export default function ProjectPage() {
 
   const [notFound, setNotFound] = useState(false)
   const [pendingPreset, setPendingPreset] = useState<TablePreset | null>(null)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [exportToast, setExportToast] = useState<string | null>(null)
 
   // Escape key cancels assignment mode
   useEffect(() => {
@@ -195,6 +262,26 @@ export default function ProjectPage() {
     await addTable(table)
   }
 
+  const handleExport = async (format: 'png' | 'pdf') => {
+    if (!project) return
+    if (project.tables.length === 0) {
+      setExportToast('Nothing to export yet')
+      setTimeout(() => setExportToast(null), 3500)
+      return
+    }
+    setExportLoading(true)
+    try {
+      if (format === 'png') await exportToPNG(project)
+      else await exportToPDF(project)
+    } catch (err) {
+      console.error('Export failed', err)
+      setExportToast('Export failed — please try again')
+      setTimeout(() => setExportToast(null), 3500)
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   if (notFound) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
@@ -229,6 +316,7 @@ export default function ProjectPage() {
 
         <div className="flex items-center gap-3">
           <InsertMenu onSelectPreset={setPendingPreset} />
+          <ExportMenu onExport={handleExport} />
           <span className="text-xs text-slate-400">
             {project.room.widthFt} × {project.room.heightFt} ft
           </span>
@@ -277,6 +365,26 @@ export default function ProjectPage() {
           onClose={() => setPendingPreset(null)}
           onConfirm={(count) => handleConfirmSeatCount(pendingPreset, count)}
         />
+      )}
+
+      {/* Export loading overlay */}
+      {exportLoading && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-xl bg-white px-5 py-3 shadow-lg border border-slate-200">
+            <svg className="h-4 w-4 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+            </svg>
+            <span className="text-sm font-medium text-slate-700">Preparing export…</span>
+          </div>
+        </div>
+      )}
+
+      {/* Export toast */}
+      {exportToast && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm text-white shadow-lg">
+          {exportToast}
+        </div>
       )}
     </div>
   )
