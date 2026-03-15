@@ -17,6 +17,7 @@
     "jspdf": "^4.2.0",
     "papaparse": "^5.5.3",
     "postcss": "^8.5.8",
+    "potrace-wasm": "^1.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
