@@ -22,7 +22,7 @@ export default function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) 
 
   const regularSlots = slots.filter((s): s is Extract<GuestSlot, { kind: 'guest' }> => s.kind === 'guest')
   const canRemoveGuest = regularSlots.length > 1
-  const canSubmit = regularSlots.some((s) => s.name.trim() !== '')
+  const canSubmit = regularSlots.every((s) => s.name.trim() !== '')
 
   function addGuestRow() {
     setSlots((prev) => [...prev, { kind: 'guest', id: crypto.randomUUID(), name: '', notes: '' }])
@@ -85,7 +85,7 @@ export default function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) 
         const parentName = slotIdToName.get(slot.parentId) ?? ''
         await addGuest({
           id: crypto.randomUUID(),
-          name: `Guest of ${parentName}`,
+          name: `${parentName}'s Guest`,
           group: groupVal,
           notes: slot.notes.trim() || undefined,
           seatId: null,

@@ -271,7 +271,9 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
   if (!project) return null
 
   const guests = project.guests
-  const assignedCount = guests.filter((g) => g.seatId !== null).length
+  const totalSeats = project.tables.reduce((sum, t) => sum + t.seats.length, 0)
+  const filledSeats = project.tables.reduce((sum, t) => sum + t.seats.filter((s) => s.guestId !== null).length, 0)
+  const remainingSeats = totalSeats - filledSeats
 
   // Build seatId â†’ { tableLabel, seatNumber } for badge display
   const seatAssignmentMap: Record<string, { tableLabel: string; seatNumber: number }> = {}
@@ -359,17 +361,17 @@ export default function GuestListPanel({ onPanToSeat }: { onPanToSeat: (seatId: 
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Searchâ€¦"
+              placeholder="Search"
               className="w-full rounded-lg border border-slate-200 py-1.5 pl-7 pr-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
           </div>
 
           {/* Assignment summary */}
           <p className="text-[11px] text-slate-400">
-            <span className="font-semibold text-slate-600">{assignedCount}</span>
+            <span className="font-semibold text-slate-600">{remainingSeats}</span>
             {' / '}
-            <span className="font-semibold text-slate-600">{guests.length}</span>
-            {' guests assigned'}
+            <span className="font-semibold text-slate-600">{totalSeats}</span>
+            {' Seats remain to be filled'}
           </p>
         </div>
 

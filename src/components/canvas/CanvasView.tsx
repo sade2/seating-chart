@@ -175,6 +175,21 @@ const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function Canvas
     return map
   }, [project])
 
+  // seatId → host name for plus-one guests
+  const plusOneHostMap = useMemo<Record<string, string>>(() => {
+    if (!project) return {}
+    const guestById: Record<string, string> = {}
+    for (const guest of project.guests) guestById[guest.id] = guest.name
+    const map: Record<string, string> = {}
+    for (const guest of project.guests) {
+      if (guest.seatId && guest.plusOneOf) {
+        const hostName = guestById[guest.plusOneOf]
+        if (hostName) map[guest.seatId] = hostName
+      }
+    }
+    return map
+  }, [project])
+
   // ── Mouse handlers ──────────────────────────────────────────────────────────
 
   const handleBgMouseDown = (e: React.MouseEvent<SVGRectElement>) => {
@@ -272,6 +287,7 @@ const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
                 selectedSeatId={selectedSeatId}
                 pendingGuestId={pendingGuestId}
                 guestNameMap={guestNameMap}
+                plusOneHostMap={plusOneHostMap}
                 warnings={warnings}
                 overridePos={
                   drag.type === 'table' && drag.tableId === table.id

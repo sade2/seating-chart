@@ -1,3 +1,26 @@
+export type ShapeType = 'circle' | 'rectangle' | 'square'
+
+export interface CanvasShape {
+  id: string
+  type: ShapeType
+  x: number        // feet, center
+  y: number        // feet, center
+  widthFt: number  // diameter for circle; width for rect/square
+  heightFt: number // same as widthFt for circle/square; independent for rectangle
+  rotation: number // degrees
+  label: string    // optional label shown centered on shape
+  color: string    // fill color
+}
+
+export interface CanvasText {
+  id: string
+  x: number        // feet, center
+  y: number        // feet, center
+  text: string
+  fontSize: number // px at default 20px/ft scale
+  rotation: number // degrees
+}
+
 export interface Project {
   id: string
   name: string
@@ -6,6 +29,8 @@ export interface Project {
   room: Room
   tables: Table[]
   guests: Guest[]
+  shapes: CanvasShape[]
+  texts: CanvasText[]
 }
 
 export interface TracedFloorPlan {

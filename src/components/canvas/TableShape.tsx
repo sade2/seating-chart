@@ -13,7 +13,8 @@ interface TableShapeProps {
   isSelected: boolean
   selectedSeatId: string | null
   pendingGuestId: string | null
-  guestNameMap: Record<string, string>  // seatId → guest name
+  guestNameMap: Record<string, string>    // seatId → guest name
+  plusOneHostMap: Record<string, string>  // seatId → host name (for plus-ones)
   warnings: string[]
   overridePos?: { x: number; y: number }
   onMouseDown: (e: React.MouseEvent, tableId: string) => void
@@ -29,6 +30,7 @@ export default function TableShape({
   selectedSeatId,
   pendingGuestId,
   guestNameMap,
+  plusOneHostMap,
   warnings,
   overridePos,
   onMouseDown,
@@ -125,6 +127,7 @@ export default function TableShape({
             zoom={zoom}
             tableRotation={rotation}
             guestName={isOccupied ? guestNameMap[seat.id] : undefined}
+            hostName={isOccupied ? plusOneHostMap[seat.id] : undefined}
             isSelected={selectedSeatId === seat.id}
             isPending={!!pendingGuestId && !isOccupied}
             isDimmed={!!pendingGuestId && isOccupied}
