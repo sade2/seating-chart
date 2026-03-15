@@ -5,7 +5,14 @@ export interface RepairResult {
   repairs: string[]   // summary strings shown in the banner (empty = no repairs needed)
 }
 
-export function repairProject(project: Project): RepairResult {
+export function repairProject(rawProject: Project): RepairResult {
+  // Ensure new fields exist for projects saved before shapes/texts were added
+  const project: Project = {
+    ...rawProject,
+    shapes: rawProject.shapes ?? [],
+    texts: rawProject.texts ?? [],
+  }
+
   // Build seatId → guestId map from all tables
   const seatGuestId = new Map<string, string | null>()
   for (const table of project.tables) {

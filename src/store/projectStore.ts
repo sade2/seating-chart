@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { db } from '../db'
-import type { Project, Table, Guest, Room, TracedFloorPlan } from '../types'
+import type { Project, Table, Guest, Room, TracedFloorPlan, CanvasShape, CanvasText } from '../types'
 
 interface ProjectStore {
   project: Project | null
@@ -20,11 +20,24 @@ interface ProjectStore {
   // Table replace (for Edit Table modal)
   replaceTable: (tableId: string, newTableData: Partial<Table>, guestUpdates: { guestId: string; seatId: string | null }[]) => Promise<void>
 
+  // Bulk guest assignment
+  bulkAssignGuests: (tableId: string, guestIds: string[]) => Promise<void>
+
   // Guest mutations
   addGuest: (guest: Guest) => Promise<void>
   updateGuest: (id: string, changes: Partial<Guest>) => Promise<void>
   deleteGuest: (id: string) => Promise<void>
   deleteManyGuests: (ids: string[]) => Promise<void>
+
+  // Shape mutations
+  addShape: (shape: CanvasShape) => Promise<void>
+  updateShape: (id: string, changes: Partial<CanvasShape>) => Promise<void>
+  deleteShape: (id: string) => Promise<void>
+
+  // Text mutations
+  addText: (text: CanvasText) => Promise<void>
+  updateText: (id: string, changes: Partial<CanvasText>) => Promise<void>
+  deleteText: (id: string) => Promise<void>
 
   // Project settings
   updateRoom: (changes: Partial<Room>) => Promise<void>
@@ -38,9 +51,13 @@ interface ProjectStore {
   // Selection state
   selectedTableId: string | null
   selectedSeatId: string | null
+  selectedShapeId: string | null
+  selectedTextId: string | null
   pendingGuestId: string | null
   setSelectedTable: (id: string | null) => void
   setSelectedSeat: (id: string | null) => void
+  setSelectedShape: (id: string | null) => void
+  setSelectedText: (id: string | null) => void
   setPendingGuest: (id: string | null) => void
 }
 
@@ -52,6 +69,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   project: null,
   selectedTableId: null,
   selectedSeatId: null,
+  selectedShapeId: null,
+  selectedTextId: null,
   pendingGuestId: null,
 
   setProject: (project) => set({ project }),
@@ -259,6 +278,78 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     persist(updated)
   },
 
+  addShape: async (shape) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      shapes: [...(project.shapes ?? []), shape],
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  updateShape: async (id, changes) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      shapes: (project.shapes ?? []).map((s) => (s.id === id ? { ...s, ...changes } : s)),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  deleteShape: async (id) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      shapes: (project.shapes ?? []).filter((s) => s.id !== id),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated, selectedShapeId: null })
+    persist(updated)
+  },
+
+  addText: async (text) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      texts: [...(project.texts ?? []), text],
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  updateText: async (id, changes) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      texts: (project.texts ?? []).map((t) => (t.id === id ? { ...t, ...changes } : t)),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  deleteText: async (id) => {
+    const { project } = get()
+    if (!project) return
+    const updated: Project = {
+      ...project,
+      texts: (project.texts ?? []).filter((t) => t.id !== id),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated, selectedTextId: null })
+    persist(updated)
+  },
+
   updateRoom: async (changes) => {
     const { project } = get()
     if (!project) return
@@ -323,7 +414,46 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     persist(updated)
   },
 
-  setSelectedTable: (id) => set({ selectedTableId: id, selectedSeatId: null }),
-  setSelectedSeat: (id) => set({ selectedSeatId: id, selectedTableId: null }),
+  bulkAssignGuests: async (tableId, guestIds) => {
+    const { project } = get()
+    if (!project) return
+    const table = project.tables.find((t) => t.id === tableId)
+    if (!table) return
+
+    const newGuestIdSet = new Set(guestIds)
+    const currentlyHere = new Set(
+      table.seats.filter((s) => s.guestId !== null).map((s) => s.guestId as string)
+    )
+    const toRemove = new Set([...currentlyHere].filter((id) => !newGuestIdSet.has(id)))
+    const toAdd = guestIds.filter((id) => !currentlyHere.has(id))
+
+    let queue = [...toAdd]
+    const finalSeats = table.seats
+      .map((s) => (s.guestId && toRemove.has(s.guestId) ? { ...s, guestId: null } : s))
+      .map((s) => (s.guestId === null && queue.length > 0 ? { ...s, guestId: queue.shift()! } : s))
+
+    const newSeatForGuest = new Map<string, string>()
+    for (const seat of finalSeats) {
+      if (seat.guestId && toAdd.includes(seat.guestId)) newSeatForGuest.set(seat.guestId, seat.id)
+    }
+
+    const updated: Project = {
+      ...project,
+      tables: project.tables.map((t) => (t.id === tableId ? { ...t, seats: finalSeats } : t)),
+      guests: project.guests.map((g) => {
+        if (toRemove.has(g.id)) return { ...g, seatId: null }
+        if (newSeatForGuest.has(g.id)) return { ...g, seatId: newSeatForGuest.get(g.id)! }
+        return g
+      }),
+      updatedAt: Date.now(),
+    }
+    set({ project: updated })
+    persist(updated)
+  },
+
+  setSelectedTable: (id) => set({ selectedTableId: id, selectedSeatId: null, selectedShapeId: null, selectedTextId: null }),
+  setSelectedSeat: (id) => set({ selectedSeatId: id, selectedTableId: null, selectedShapeId: null, selectedTextId: null }),
+  setSelectedShape: (id) => set({ selectedShapeId: id, selectedTableId: null, selectedSeatId: null, selectedTextId: null }),
+  setSelectedText: (id) => set({ selectedTextId: id, selectedTableId: null, selectedSeatId: null, selectedShapeId: null }),
   setPendingGuest: (id) => set({ pendingGuestId: id }),
 }))

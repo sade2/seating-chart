@@ -10,9 +10,72 @@ import { repairProject } from '../lib/repairProject'
 import { RenameProjectModal, ResizeCanvasModal } from '../components/modals/ProjectSettingsModals'
 import FloorPlanImportModal from '../components/modals/FloorPlanImportModal'
 import CreateTableModal from '../components/modals/CreateTableModal'
+import CreateShapeModal from '../components/modals/CreateShapeModal'
 import AddGuestModal from '../components/modals/AddGuestModal'
 import EditTableModal from '../components/modals/EditTableModal'
 import CanvasContextMenu, { type ContextMenuInfo } from '../components/canvas/CanvasContextMenu'
+
+// ── Insert Menu ───────────────────────────────────────────────────────────────
+
+interface InsertMenuProps {
+  onTable: () => void
+  onShape: () => void
+  onText: () => void
+}
+
+function InsertMenu({ onTable, onShape, onText }: InsertMenuProps) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <path d="M7 1v12M1 7h12" />
+        </svg>
+        Insert
+        <svg className="h-3 w-3 text-slate-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 4l4 4 4-4" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
+          <button
+            onClick={() => { setOpen(false); onTable() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Table
+          </button>
+          <button
+            onClick={() => { setOpen(false); onShape() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Shape
+          </button>
+          <button
+            onClick={() => { setOpen(false); onText() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Text
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── Export Menu ───────────────────────────────────────────────────────────────
 
@@ -180,6 +243,8 @@ export default function ProjectPage() {
   const setProject = useProjectStore((s) => s.setProject)
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
+  const addText = useProjectStore((s) => s.addText)
+  const setSelectedText = useProjectStore((s) => s.setSelectedText)
 
   const canvasRef = useRef<CanvasViewHandle>(null)
 
@@ -190,6 +255,7 @@ export default function ProjectPage() {
   const [notFound, setNotFound] = useState(false)
   const [createTableOpen, setCreateTableOpen] = useState(false)
   const [createTableInitPos, setCreateTableInitPos] = useState<{ x: number; y: number } | undefined>()
+  const [createShapeOpen, setCreateShapeOpen] = useState(false)
   const [addGuestOpen, setAddGuestOpen] = useState(false)
   const [editTableId, setEditTableId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuInfo | null>(null)
@@ -279,15 +345,16 @@ export default function ProjectPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => { setCreateTableInitPos(undefined); setCreateTableOpen(true) }}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-              <path d="M7 1v12M1 7h12" />
-            </svg>
-            Insert
-          </button>
+          <InsertMenu
+            onTable={() => { setCreateTableInitPos(undefined); setCreateTableOpen(true) }}
+            onShape={() => setCreateShapeOpen(true)}
+            onText={async () => {
+              if (!project) return
+              const id = crypto.randomUUID()
+              await addText({ id, x: project.room.widthFt / 2, y: project.room.heightFt / 2, text: 'Text', fontSize: 24, rotation: 0 })
+              setSelectedText(id)
+            }}
+          />
           <ExportMenu onExport={handleExport} onExportGuests={handleExportGuests} />
           <span className="text-xs text-slate-400">
             {project.room.widthFt} × {project.room.heightFt} ft
@@ -363,6 +430,11 @@ export default function ProjectPage() {
           onClose={() => { setCreateTableOpen(false); setCreateTableInitPos(undefined) }}
           position={createTableInitPos}
         />
+      )}
+
+      {/* Create shape modal */}
+      {createShapeOpen && (
+        <CreateShapeModal onClose={() => setCreateShapeOpen(false)} />
       )}
 
       {/* Add guest modal (triggered from context menu) */}

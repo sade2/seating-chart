@@ -4,6 +4,8 @@ import { getSeatPositions } from '../../lib/tableGeometry'
 import type { Table } from '../../types'
 import RoomBoundary from './RoomBoundary'
 import TableShape from './TableShape'
+import CanvasShapeEl from './CanvasShapeEl'
+import CanvasTextEl from './CanvasTextEl'
 import { getTableWarnings } from '../../lib/warnings'
 import type { ContextMenuInfo } from './CanvasContextMenu'
 
@@ -24,15 +26,23 @@ type DragState =
   | { type: 'none' }
   | { type: 'pan'; startMouse: Point; startPan: Point }
   | { type: 'table'; tableId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
+  | { type: 'shape'; shapeId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
+  | { type: 'text'; textId: string; startMouse: Point; startPosFt: Point; currentPosFt: Point }
 
 const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView({ onContextMenu: onContextMenuProp }, ref) {
   const project = useProjectStore((s) => s.project)
   const selectedTableId = useProjectStore((s) => s.selectedTableId)
   const selectedSeatId = useProjectStore((s) => s.selectedSeatId)
+  const selectedShapeId = useProjectStore((s) => s.selectedShapeId)
+  const selectedTextId = useProjectStore((s) => s.selectedTextId)
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const updateTable = useProjectStore((s) => s.updateTable)
+  const updateShape = useProjectStore((s) => s.updateShape)
+  const updateText = useProjectStore((s) => s.updateText)
   const setSelectedTable = useProjectStore((s) => s.setSelectedTable)
   const setSelectedSeat = useProjectStore((s) => s.setSelectedSeat)
+  const setSelectedShape = useProjectStore((s) => s.setSelectedShape)
+  const setSelectedText = useProjectStore((s) => s.setSelectedText)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
   const assignSeat = useProjectStore((s) => s.assignSeat)
 
@@ -216,6 +226,32 @@ const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function Canvas
     })
   }
 
+  const handleShapeMouseDown = (e: React.MouseEvent, shapeId: string) => {
+    if (e.button !== 0) return
+    const shape = project?.shapes?.find((s) => s.id === shapeId)
+    if (!shape) return
+    setDrag({
+      type: 'shape',
+      shapeId,
+      startMouse: { x: e.clientX, y: e.clientY },
+      startPosFt: { x: shape.x, y: shape.y },
+      currentPosFt: { x: shape.x, y: shape.y },
+    })
+  }
+
+  const handleTextMouseDown = (e: React.MouseEvent, textId: string) => {
+    if (e.button !== 0) return
+    const text = project?.texts?.find((t) => t.id === textId)
+    if (!text) return
+    setDrag({
+      type: 'text',
+      textId,
+      startMouse: { x: e.clientX, y: e.clientY },
+      startPosFt: { x: text.x, y: text.y },
+      currentPosFt: { x: text.x, y: text.y },
+    })
+  }
+
 const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const d = dragRef.current
     if (d.type === 'none') return
@@ -227,7 +263,7 @@ const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
       return
     }
 
-    if (d.type === 'table') {
+    if (d.type === 'table' || d.type === 'shape' || d.type === 'text') {
       const pxPerFt = project?.room.pixelsPerFoot ?? 20
       const dx = (e.clientX - d.startMouse.x) / zoomRef.current / pxPerFt
       const dy = (e.clientY - d.startMouse.y) / zoomRef.current / pxPerFt
@@ -241,6 +277,10 @@ const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const d = dragRef.current
     if (d.type === 'table') {
       await updateTable(d.tableId, { x: d.currentPosFt.x, y: d.currentPosFt.y })
+    } else if (d.type === 'shape') {
+      await updateShape(d.shapeId, { x: d.currentPosFt.x, y: d.currentPosFt.y })
+    } else if (d.type === 'text') {
+      await updateText(d.textId, { x: d.currentPosFt.x, y: d.currentPosFt.y })
     }
     setDrag({ type: 'none' })
   }
@@ -274,6 +314,42 @@ const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
         {/* Pan + zoom group — all canvas content lives here */}
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           <RoomBoundary room={project.room} />
+
+          {/* Shapes (rendered below tables) */}
+          {(project.shapes ?? []).map((shape) => (
+            <CanvasShapeEl
+              key={shape.id}
+              shape={shape}
+              pixelsPerFoot={pixelsPerFoot}
+              zoom={zoom}
+              isSelected={selectedShapeId === shape.id}
+              overridePos={
+                drag.type === 'shape' && drag.shapeId === shape.id
+                  ? drag.currentPosFt
+                  : undefined
+              }
+              onMouseDown={handleShapeMouseDown}
+              onClick={handleShapeClick}
+            />
+          ))}
+
+          {/* Text elements (rendered below tables) */}
+          {(project.texts ?? []).map((text) => (
+            <CanvasTextEl
+              key={text.id}
+              text={text}
+              pixelsPerFoot={pixelsPerFoot}
+              zoom={zoom}
+              isSelected={selectedTextId === text.id}
+              overridePos={
+                drag.type === 'text' && drag.textId === text.id
+                  ? drag.currentPosFt
+                  : undefined
+              }
+              onMouseDown={handleTextMouseDown}
+              onClick={handleTextClick}
+            />
+          ))}
 
           {project.tables.map((table) => {
             const warnings = getTableWarnings(table, project.room)
@@ -341,6 +417,16 @@ const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
   function handleTableClick(tableId: string) {
     if (pendingGuestId) return
     setSelectedTable(tableId)
+  }
+
+  function handleShapeClick(shapeId: string) {
+    if (pendingGuestId) return
+    setSelectedShape(selectedShapeId === shapeId ? null : shapeId)
+  }
+
+  function handleTextClick(textId: string) {
+    if (pendingGuestId) return
+    setSelectedText(selectedTextId === textId ? null : textId)
   }
 
   function handleSeatClick(seatId: string) {

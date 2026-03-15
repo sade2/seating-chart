@@ -34,6 +34,8 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
       room: { widthFt, heightFt, pixelsPerFoot: 20 },
       tables: [],
       guests: [],
+      shapes: [],
+      texts: [],
     }
     await db.projects.add(project)
     onCreate(project)

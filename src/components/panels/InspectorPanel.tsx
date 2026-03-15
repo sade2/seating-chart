@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
-import type { Guest, Table, Seat } from '../../types'
+import type { Guest, Table, Seat, CanvasShape, CanvasText } from '../../types'
 import Modal from '../ui/Modal'
 import { getTableWarnings } from '../../lib/warnings'
 import EditTableModal from '../modals/EditTableModal'
@@ -397,12 +397,193 @@ function SeatInspector({ seat, tableLabel, tableId }: { seat: Seat; tableLabel: 
   )
 }
 
+// ── Shape inspector ────────────────────────────────────────────────────────────
+
+const SHAPE_COLORS = ['#94a3b8', '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#0ea5e9']
+
+function ShapeInspector({ shape }: { shape: CanvasShape }) {
+  const updateShape = useProjectStore((s) => s.updateShape)
+  const deleteShape = useProjectStore((s) => s.deleteShape)
+
+  const [label, setLabel] = useState(shape.label)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleLabelBlur = () => {
+    if (label !== shape.label) updateShape(shape.id, { label })
+  }
+
+  const sizeLabel = shape.type === 'circle'
+    ? `${shape.widthFt} ft diameter`
+    : shape.type === 'square'
+    ? `${shape.widthFt} ft side`
+    : `${shape.widthFt} × ${shape.heightFt} ft`
+
+  return (
+    <>
+      <Section>
+        <SectionLabel>Type</SectionLabel>
+        <ReadOnlyField value={shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} />
+      </Section>
+
+      <Section>
+        <SectionLabel>Size</SectionLabel>
+        <ReadOnlyField value={sizeLabel} />
+      </Section>
+
+      <Section>
+        <SectionLabel>Label</SectionLabel>
+        <input
+          ref={inputRef}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onBlur={handleLabelBlur}
+          onKeyDown={(e) => { if (e.key === 'Enter') inputRef.current?.blur() }}
+          placeholder="Optional label"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+        />
+      </Section>
+
+      <Section>
+        <SectionLabel>Color</SectionLabel>
+        <div className="flex gap-2">
+          {SHAPE_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => updateShape(shape.id, { color: c })}
+              style={{ backgroundColor: c }}
+              className={`h-6 w-6 rounded-full transition-transform ${
+                shape.color === c ? 'scale-110 ring-2 ring-indigo-400 ring-offset-1' : 'hover:scale-110'
+              }`}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <div className="mt-auto border-t border-slate-100 px-4 py-4">
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full rounded-lg border border-red-200 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            Delete Shape
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">Delete this shape?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteShape(shape.id)}
+                className="flex-1 rounded-lg bg-red-600 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ── Text inspector ─────────────────────────────────────────────────────────────
+
+function TextInspector({ text }: { text: CanvasText }) {
+  const updateText = useProjectStore((s) => s.updateText)
+  const deleteText = useProjectStore((s) => s.deleteText)
+
+  const [content, setContent] = useState(text.text)
+  const [fontSize, setFontSize] = useState(String(text.fontSize))
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const handleContentBlur = () => {
+    const trimmed = content.trim()
+    if (!trimmed) { setContent(text.text); return }
+    if (trimmed !== text.text) updateText(text.id, { text: trimmed })
+  }
+
+  const handleFontSizeBlur = () => {
+    const size = Math.max(8, Math.min(120, Number(fontSize) || text.fontSize))
+    setFontSize(String(size))
+    if (size !== text.fontSize) updateText(text.id, { fontSize: size })
+  }
+
+  return (
+    <>
+      <Section>
+        <SectionLabel>Text</SectionLabel>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onBlur={handleContentBlur}
+          rows={3}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+        />
+      </Section>
+
+      <Section>
+        <SectionLabel>Font Size</SectionLabel>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="8"
+            max="120"
+            value={fontSize}
+            onChange={(e) => setFontSize(e.target.value)}
+            onBlur={handleFontSizeBlur}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleFontSizeBlur() }}
+            className="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+          />
+          <span className="text-sm text-slate-400">px</span>
+        </div>
+      </Section>
+
+      <div className="mt-auto border-t border-slate-100 px-4 py-4">
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full rounded-lg border border-red-200 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            Delete Text
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">Delete this text?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteText(text.id)}
+                className="flex-1 rounded-lg bg-red-600 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 // ── Inspector Panel (root) ─────────────────────────────────────────────────────
 
 export default function InspectorPanel() {
   const project = useProjectStore((s) => s.project)
   const selectedTableId = useProjectStore((s) => s.selectedTableId)
   const selectedSeatId = useProjectStore((s) => s.selectedSeatId)
+  const selectedShapeId = useProjectStore((s) => s.selectedShapeId)
+  const selectedTextId = useProjectStore((s) => s.selectedTextId)
 
   if (!project) return null
 
@@ -420,12 +601,30 @@ export default function InspectorPanel() {
     }
   }
 
+  const selectedShape = selectedShapeId
+    ? (project.shapes ?? []).find((s) => s.id === selectedShapeId) ?? null
+    : null
+
+  const selectedText = selectedTextId
+    ? (project.texts ?? []).find((t) => t.id === selectedTextId) ?? null
+    : null
+
+  const headerLabel = selectedTable
+    ? 'Table'
+    : selectedSeat
+    ? `Seat ${selectedSeat.index + 1}`
+    : selectedShape
+    ? 'Shape'
+    : selectedText
+    ? 'Text'
+    : 'Inspector'
+
   return (
     <aside className="flex h-full w-60 flex-shrink-0 flex-col overflow-y-auto border-l border-slate-200 bg-white">
       {/* Header */}
       <div className="border-b border-slate-100 px-4 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          {selectedTable ? 'Table' : selectedSeat ? `Seat ${selectedSeat.index + 1}` : 'Inspector'}
+          {headerLabel}
         </p>
       </div>
 
@@ -433,6 +632,10 @@ export default function InspectorPanel() {
         <TableInspector key={selectedTable.id} table={selectedTable} warnings={getTableWarnings(selectedTable, project.room)} />
       ) : selectedSeat && seatTable ? (
         <SeatInspector key={selectedSeat.id} seat={selectedSeat} tableLabel={seatTable.label} tableId={seatTable.id} />
+      ) : selectedShape ? (
+        <ShapeInspector key={selectedShape.id} shape={selectedShape} />
+      ) : selectedText ? (
+        <TextInspector key={selectedText.id} text={selectedText} />
       ) : (
         <EmptyInspector room={project.room} />
       )}

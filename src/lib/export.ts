@@ -30,7 +30,7 @@ function getInitials(name: string): string {
 }
 
 function buildExportSVG(project: Project): { svg: string; width: number; height: number } {
-  const { room, tables, guests } = project
+  const { room, tables, guests, shapes = [], texts = [] } = project
   const W = room.widthFt * EXPORT_PPF + PAD * 2
   const H = room.heightFt * EXPORT_PPF + PAD * 2
 
@@ -81,6 +81,31 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
     return `<g transform="translate(${cx},${cy}) rotate(${table.rotation})">${body}${seatEls}${label}</g>`
   })
 
+  const shapeEls = shapes.map((shape) => {
+    const cx = shape.x * EXPORT_PPF + PAD
+    const cy = shape.y * EXPORT_PPF + PAD
+    const halfW = (shape.widthFt / 2) * EXPORT_PPF
+    const halfH = (shape.heightFt / 2) * EXPORT_PPF
+    const body = shape.type === 'circle'
+      ? `<circle r="${halfW}" fill="${shape.color}" stroke="none" opacity="0.85"/>`
+      : `<rect x="${-halfW}" y="${-halfH}" width="${halfW * 2}" height="${halfH * 2}" rx="3" fill="${shape.color}" stroke="none" opacity="0.85"/>`
+    const labelEl = shape.label
+      ? `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="13" fill="white" font-family="Arial, sans-serif" font-weight="600">${escapeXml(shape.label)}</text>`
+      : ''
+    return `<g transform="translate(${cx},${cy}) rotate(${shape.rotation})">${body}${labelEl}</g>`
+  })
+
+  const textEls = texts.map((text) => {
+    const tx = text.x * EXPORT_PPF + PAD
+    const ty = text.y * EXPORT_PPF + PAD
+    return (
+      `<g transform="translate(${tx},${ty}) rotate(${text.rotation})">` +
+      `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="${text.fontSize}" fill="#374151" font-family="Arial, sans-serif" font-weight="500">` +
+      `${escapeXml(text.text)}</text>` +
+      `</g>`
+    )
+  })
+
   const roomRect =
     `<rect x="${PAD}" y="${PAD}" width="${room.widthFt * EXPORT_PPF}" height="${room.heightFt * EXPORT_PPF}" ` +
     `fill="white" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="10 5"/>`
@@ -99,6 +124,8 @@ function buildExportSVG(project: Project): { svg: string; width: number; height:
     `<rect width="${W}" height="${H}" fill="#f1f5f9"/>` +
     roomRect +
     floorPlanEl +
+    shapeEls.join('') +
+    textEls.join('') +
     tableEls.join('') +
     `</svg>`
 
