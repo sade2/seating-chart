@@ -4,6 +4,7 @@ import type { Guest, Table, Seat, CanvasShape, CanvasText } from '../../types'
 import Modal from '../ui/Modal'
 import { getTableWarnings } from '../../lib/warnings'
 import EditTableModal from '../modals/EditTableModal'
+import BulkAssignModal from '../modals/BulkAssignModal'
 import FloorPlanImportModal from '../modals/FloorPlanImportModal'
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ function TableInspector({ table, warnings = [] }: { table: Table; warnings?: str
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmUnassignAll, setConfirmUnassignAll] = useState(false)
   const [editTableOpen, setEditTableOpen] = useState(false)
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   if (!project) return null
@@ -232,6 +234,23 @@ function TableInspector({ table, warnings = [] }: { table: Table; warnings?: str
             </svg>
           </button>
         </div>
+      )}
+
+      {/* Assign Guests */}
+      <div className="border-b border-slate-100 px-4 py-3">
+        <button
+          onClick={() => setBulkAssignOpen(true)}
+          className="w-full rounded-lg bg-indigo-50 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+        >
+          Assign Guests
+        </button>
+      </div>
+
+      {bulkAssignOpen && (
+        <BulkAssignModal
+          table={table}
+          onClose={() => setBulkAssignOpen(false)}
+        />
       )}
 
       {/* Edit Table */}
