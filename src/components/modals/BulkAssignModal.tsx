@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore'
 import type { Guest, Table } from '../../types'
 import Modal from '../ui/Modal'
@@ -6,6 +6,30 @@ import Modal from '../ui/Modal'
 interface BulkAssignModalProps {
   table: Table
   onClose: () => void
+}
+
+function GroupCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean
+  indeterminate: boolean
+  onChange: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate
+  }, [indeterminate])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+    />
+  )
 }
 
 export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps) {
@@ -27,7 +51,7 @@ export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps
     return project.guests.filter((g) => currentAtTable.has(g.id) || g.seatId === null)
   }, [project, currentAtTable])
 
-  // Sorted by group → name, used for auto-fill order
+  // Sorted by group → name
   const sortedEligible = useMemo(() =>
     [...eligible].sort((a, b) => {
       const ga = a.group ?? '', gb = b.group ?? ''
@@ -35,24 +59,8 @@ export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps
       return a.name.localeCompare(b.name)
     }), [eligible])
 
-  // Initial checked set: already at this table + auto-fill unassigned to fill remaining seats
-  const initialChecked = useMemo(() => {
-    const checked = new Set<string>(currentAtTable)
-    const remaining = table.seats.length - currentAtTable.size
-    if (remaining > 0) {
-      let filled = 0
-      for (const g of sortedEligible) {
-        if (filled >= remaining) break
-        if (!currentAtTable.has(g.id)) {
-          checked.add(g.id)
-          filled++
-        }
-      }
-    }
-    return checked
-  }, [sortedEligible, currentAtTable, table.seats.length])
-
-  const [checked, setChecked] = useState<Set<string>>(() => new Set(initialChecked))
+  // Initial checked set: only guests already at this table (no auto-fill)
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(currentAtTable))
   const isFull = checked.size >= table.seats.length
 
   function toggle(id: string) {
@@ -60,8 +68,32 @@ export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
-      } else if (!isFull) {
+      } else if (next.size < table.seats.length) {
         next.add(id)
+      }
+      return next
+    })
+  }
+
+  function toggleGroup(groupGuests: Guest[]) {
+    setChecked((prev) => {
+      const allChecked = groupGuests.every((g) => prev.has(g.id))
+      const someChecked = groupGuests.some((g) => prev.has(g.id))
+      const next = new Set(prev)
+
+      if (allChecked || someChecked) {
+        // Uncheck everyone in the group (including "here" guests)
+        for (const g of groupGuests) next.delete(g.id)
+      } else {
+        // Re-add "here" guests from this group first
+        for (const g of groupGuests) {
+          if (currentAtTable.has(g.id)) next.add(g.id)
+        }
+        // Fill remaining open seats with unassigned guests from this group
+        for (const g of groupGuests) {
+          if (next.size >= table.seats.length) break
+          if (!currentAtTable.has(g.id)) next.add(g.id)
+        }
       }
       return next
     })
@@ -76,13 +108,11 @@ export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps
       list.push(g)
       map.set(key, list)
     }
-    // Sort: named groups first (alpha), then ungrouped ('')
-    const entries = [...map.entries()].sort(([a], [b]) => {
+    return [...map.entries()].sort(([a], [b]) => {
       if (a === '') return 1
       if (b === '') return -1
       return a.localeCompare(b)
     })
-    return entries
   }, [sortedEligible])
 
   async function handleAssign() {
@@ -115,45 +145,56 @@ export default function BulkAssignModal({ table, onClose }: BulkAssignModalProps
           </p>
         ) : (
           <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
-            {groupedGuests.map(([group, guests], gi) => (
-              <div key={group || '__ungrouped'}>
-                {group && (
-                  <div
-                    className={`sticky top-0 bg-slate-50 px-3 py-1.5${gi > 0 ? ' border-t border-slate-100' : ''}`}
-                  >
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {group}
-                    </p>
-                  </div>
-                )}
-                {guests.map((guest) => {
-                  const isChecked = checked.has(guest.id)
-                  const isDisabled = !isChecked && isFull
-                  return (
-                    <label
-                      key={guest.id}
-                      className={`flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50${isDisabled ? ' opacity-40' : ''}`}
+            {groupedGuests.map(([group, guests], gi) => {
+              const allGroupChecked = guests.every((g) => checked.has(g.id))
+              const someGroupChecked = guests.some((g) => checked.has(g.id))
+              const groupIndeterminate = someGroupChecked && !allGroupChecked
+
+              return (
+                <div key={group || '__ungrouped'}>
+                  {group && (
+                    <div
+                      className={`sticky top-0 flex items-center gap-2 bg-slate-50 px-3 py-1.5${gi > 0 ? ' border-t border-slate-100' : ''}`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        disabled={isDisabled}
-                        onChange={() => toggle(guest.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      <GroupCheckbox
+                        checked={allGroupChecked}
+                        indeterminate={groupIndeterminate}
+                        onChange={() => toggleGroup(guests)}
                       />
-                      <p className="min-w-0 flex-1 truncate text-sm text-slate-800">
-                        {guest.name}
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        {group}
                       </p>
-                      {currentAtTable.has(guest.id) && (
-                        <span className="flex-shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-400">
-                          here
-                        </span>
-                      )}
-                    </label>
-                  )
-                })}
-              </div>
-            ))}
+                    </div>
+                  )}
+                  {guests.map((guest) => {
+                    const isChecked = checked.has(guest.id)
+                    const isDisabled = !isChecked && isFull
+                    return (
+                      <label
+                        key={guest.id}
+                        className={`flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50${isDisabled ? ' opacity-40' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={isDisabled}
+                          onChange={() => toggle(guest.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <p className="min-w-0 flex-1 truncate text-sm text-slate-800">
+                          {guest.name}
+                        </p>
+                        {currentAtTable.has(guest.id) && (
+                          <span className="flex-shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-400">
+                            here
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
         )}
 
