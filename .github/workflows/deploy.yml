@@ -1,0 +1,107 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'package*.json'
+      - 'infrastructure/lambda/src/**'
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '20'
+
+jobs:
+  # ── Deploy Frontend ────────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.API_URL }}
+          VITE_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          VITE_REDIRECT_URI: ${{ vars.REDIRECT_URI }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync assets (immutable cache)
+        run: |
+          aws s3 sync dist/assets/ s3://${{ vars.FRONTEND_BUCKET }}/assets/ \
+            --cache-control "public,max-age=31536000,immutable" \
+            --delete
+
+      - name: Sync root (no-cache for index.html + manifests)
+        run: |
+          aws s3 sync dist/ s3://${{ vars.FRONTEND_BUCKET }}/ \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --exclude "assets/*" \
+            --delete
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CF_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+  # ── Deploy Lambda ──────────────────────────────────────────────────────────
+  deploy-lambda:
+    name: Deploy Lambda
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: infrastructure/lambda/package-lock.json
+
+      - name: Install Lambda dependencies
+        working-directory: infrastructure/lambda
+        run: npm ci
+
+      - name: Build Lambda
+        working-directory: infrastructure/lambda
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://infrastructure/lambda/dist/handler.zip
