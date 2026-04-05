@@ -29,6 +29,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate required variables
+        run: |
+          missing=()
+          test -n "${{ vars.DEPLOY_ROLE_ARN }}"        || missing+=(DEPLOY_ROLE_ARN)
+          test -n "${{ vars.API_URL }}"                || missing+=(API_URL)
+          test -n "${{ vars.COGNITO_USER_POOL_ID }}"   || missing+=(COGNITO_USER_POOL_ID)
+          test -n "${{ vars.COGNITO_CLIENT_ID }}"      || missing+=(COGNITO_CLIENT_ID)
+          test -n "${{ vars.COGNITO_DOMAIN }}"         || missing+=(COGNITO_DOMAIN)
+          test -n "${{ vars.REDIRECT_URI }}"           || missing+=(REDIRECT_URI)
+          test -n "${{ vars.FRONTEND_BUCKET }}"        || missing+=(FRONTEND_BUCKET)
+          test -n "${{ vars.CF_DISTRIBUTION_ID }}"     || missing+=(CF_DISTRIBUTION_ID)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required variables for environment 'dev': ${missing[*]}"
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -79,6 +95,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate required variables
+        run: |
+          missing=()
+          test -n "${{ vars.DEPLOY_ROLE_ARN }}"        || missing+=(DEPLOY_ROLE_ARN)
+          test -n "${{ vars.LAMBDA_FUNCTION_NAME }}"   || missing+=(LAMBDA_FUNCTION_NAME)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required variables for environment 'dev': ${missing[*]}"
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:

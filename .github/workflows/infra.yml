@@ -66,6 +66,15 @@ jobs:
           name: lambda-dist
           path: infrastructure/lambda/dist
 
+      - name: Validate required variables
+        run: |
+          missing=()
+          test -n "${{ vars.INFRA_ROLE_ARN }}" || missing+=(INFRA_ROLE_ARN)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required variables for environment 'dev': ${missing[*]}"
+            exit 1
+          fi
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
