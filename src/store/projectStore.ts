@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import { db } from '../db'
+import { api } from '../lib/api'
 import type { Project, Table, Guest, Room, TracedFloorPlan, CanvasShape, CanvasText } from '../types'
 
 interface ProjectStore {
   project: Project | null
   setProject: (p: Project) => void
 
-  // Table mutations — update store immediately, persist to Dexie async
+  // Table mutations — update store immediately, persist to API async (debounced)
   addTable: (table: Table) => Promise<void>
   updateTable: (id: string, changes: Partial<Table>) => Promise<void>
   deleteTable: (id: string) => Promise<void>
@@ -61,9 +61,42 @@ interface ProjectStore {
   setPendingGuest: (id: string | null) => void
 }
 
+// ── Debounced persist ──────────────────────────────────────────────────────────
+//
+// The store is mutated on every drag pixel / keypress. Calling the API that
+// often would be extremely wasteful. We debounce to 1500ms — only the final
+// state in each burst is sent over the wire.
+//
+// flushPersist() is exported so ProjectPage can trigger an immediate save when
+// the tab loses visibility (user closes / switches tab).
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+let pendingProject: Project | null = null
+
 function persist(updated: Project) {
-  db.projects.put(updated).catch(console.error)
+  pendingProject = updated
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    if (pendingProject) {
+      api.saveProject(pendingProject.id, pendingProject).catch(console.error)
+      pendingProject = null
+    }
+    persistTimer = null
+  }, 1500)
 }
+
+export function flushPersist() {
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  if (pendingProject) {
+    api.saveProject(pendingProject.id, pendingProject).catch(console.error)
+    pendingProject = null
+  }
+}
+
+// ── Store ──────────────────────────────────────────────────────────────────────
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   project: null,
@@ -102,7 +135,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   deleteTable: async (id) => {
     const { project } = get()
     if (!project) return
-    // Clear seat assignments for guests sitting at this table
     const table = project.tables.find((t) => t.id === id)
     const seatIds = new Set(table?.seats.map((s) => s.id) ?? [])
     const updated: Project = {
@@ -143,7 +175,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const sourceIdx = direction === 'cw' ? (i - 1 + n) % n : (i + 1) % n
       return { ...seat, guestId: table.seats[sourceIdx].guestId }
     })
-    // Build guestId → new seatId map so guest.seatId links stay correct
     const guestSeatMap = new Map<string, string>()
     for (const seat of newSeats) {
       if (seat.guestId) guestSeatMap.set(seat.guestId, seat.id)
@@ -243,7 +274,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const { project } = get()
     if (!project) return
     const guest = project.guests.find((g) => g.id === id)
-    // Clear the seat assignment if guest was seated
     const updated: Project = {
       ...project,
       guests: project.guests.filter((g) => g.id !== id),

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db } from '../db'
+import { api, type ProjectMeta } from '../lib/api'
 import type { Project } from '../types'
 import Modal from '../components/ui/Modal'
+import { logout } from '../lib/auth'
 
 // ── New Project Modal ──────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
   const [name, setName] = useState('')
   const [widthFt, setWidthFt] = useState(40)
   const [heightFt, setHeightFt] = useState(60)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -24,6 +27,8 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
+    setSaving(true)
+    setError(null)
 
     const now = Date.now()
     const project: Project = {
@@ -37,8 +42,14 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
       shapes: [],
       texts: [],
     }
-    await db.projects.add(project)
-    onCreate(project)
+
+    try {
+      await api.createProject(project)
+      onCreate(project)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project')
+      setSaving(false)
+    }
   }
 
   return (
@@ -79,6 +90,7 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
             />
           </div>
         </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button
             type="button"
@@ -89,10 +101,10 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
           </button>
           <button
             type="submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || saving}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
           >
-            Create
+            {saving ? 'Creating…' : 'Create'}
           </button>
         </div>
       </form>
@@ -103,13 +115,15 @@ function NewProjectModal({ onClose, onCreate }: NewProjectModalProps) {
 // ── Rename Modal ───────────────────────────────────────────────────────────────
 
 interface RenameModalProps {
-  project: Project
+  project: ProjectMeta
   onClose: () => void
   onRename: (id: string, name: string) => void
 }
 
 function RenameModal({ project, onClose, onRename }: RenameModalProps) {
   const [name, setName] = useState(project.name)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -120,8 +134,16 @@ function RenameModal({ project, onClose, onRename }: RenameModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || name.trim() === project.name) { onClose(); return }
-    await db.projects.update(project.id, { name: name.trim(), updatedAt: Date.now() })
-    onRename(project.id, name.trim())
+    setSaving(true)
+    setError(null)
+
+    try {
+      await api.patchProject(project.projectId, name.trim())
+      onRename(project.projectId, name.trim())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rename project')
+      setSaving(false)
+    }
   }
 
   return (
@@ -137,6 +159,7 @@ function RenameModal({ project, onClose, onRename }: RenameModalProps) {
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
           />
         </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button
             type="button"
@@ -147,10 +170,10 @@ function RenameModal({ project, onClose, onRename }: RenameModalProps) {
           </button>
           <button
             type="submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || saving}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
           >
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
@@ -161,7 +184,7 @@ function RenameModal({ project, onClose, onRename }: RenameModalProps) {
 // ── Project Card ───────────────────────────────────────────────────────────────
 
 interface ProjectCardProps {
-  project: Project
+  project: ProjectMeta
   onOpen: () => void
   onRename: () => void
   onDelete: () => void
@@ -231,14 +254,14 @@ function ProjectCard({ project, onOpen, onRename, onDelete }: ProjectCardProps) 
       </div>
       <div className="flex gap-4 text-sm text-slate-500">
         <span>
-          <span className="font-medium text-slate-700">{project.tables.length}</span> table{project.tables.length !== 1 ? 's' : ''}
+          <span className="font-medium text-slate-700">{project.tableCount}</span> table{project.tableCount !== 1 ? 's' : ''}
         </span>
         <span>
-          <span className="font-medium text-slate-700">{project.guests.length}</span> guest{project.guests.length !== 1 ? 's' : ''}
+          <span className="font-medium text-slate-700">{project.guestCount}</span> guest{project.guestCount !== 1 ? 's' : ''}
         </span>
       </div>
       <div className="text-xs text-slate-400">
-        {project.room.widthFt} × {project.room.heightFt} ft room
+        {project.roomWidthFt} × {project.roomHeightFt} ft room
       </div>
     </div>
   )
@@ -247,7 +270,7 @@ function ProjectCard({ project, onOpen, onRename, onDelete }: ProjectCardProps) 
 // ── Delete Confirmation ────────────────────────────────────────────────────────
 
 interface DeleteConfirmModalProps {
-  project: Project
+  project: ProjectMeta
   onClose: () => void
   onConfirm: () => void
 }
@@ -282,20 +305,27 @@ function DeleteConfirmModal({ project, onClose, onConfirm }: DeleteConfirmModalP
 type ModalState =
   | { type: 'none' }
   | { type: 'new' }
-  | { type: 'rename'; project: Project }
-  | { type: 'delete'; project: Project }
+  | { type: 'rename'; project: ProjectMeta }
+  | { type: 'delete'; project: ProjectMeta }
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
 
   useEffect(() => {
-    db.projects.orderBy('createdAt').reverse().toArray().then((p) => {
-      setProjects(p)
-      setLoading(false)
-    })
+    api.listProjects()
+      .then((p) => {
+        // Sort by createdAt descending (newest first)
+        setProjects(p.sort((a, b) => b.createdAt - a.createdAt))
+        setLoading(false)
+      })
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load projects')
+        setLoading(false)
+      })
   }, [])
 
   const handleCreate = (project: Project) => {
@@ -303,13 +333,17 @@ export default function HomePage() {
   }
 
   const handleRename = (id: string, name: string) => {
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p))
+    setProjects((prev) => prev.map((p) => p.projectId === id ? { ...p, name } : p))
     setModal({ type: 'none' })
   }
 
-  const handleDelete = async (project: Project) => {
-    await db.projects.delete(project.id)
-    setProjects((prev) => prev.filter((p) => p.id !== project.id))
+  const handleDelete = async (project: ProjectMeta) => {
+    try {
+      await api.deleteProject(project.projectId)
+      setProjects((prev) => prev.filter((p) => p.projectId !== project.projectId))
+    } catch (err) {
+      console.error('Delete failed', err)
+    }
     setModal({ type: 'none' })
   }
 
@@ -322,15 +356,23 @@ export default function HomePage() {
             <h1 className="text-xl font-semibold text-slate-800">Seating Chart</h1>
             <p className="text-sm text-slate-400">Manage your events</p>
           </div>
-          <button
-            onClick={() => setModal({ type: 'new' })}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M8 2v12M2 8h12" strokeLinecap="round" />
-            </svg>
-            New Project
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setModal({ type: 'new' })}
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M8 2v12M2 8h12" strokeLinecap="round" />
+              </svg>
+              New Project
+            </button>
+            <button
+              onClick={logout}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -338,6 +380,10 @@ export default function HomePage() {
       <main className="mx-auto max-w-5xl px-8 py-8">
         {loading ? (
           <p className="text-sm text-slate-400">Loading…</p>
+        ) : loadError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+          </div>
         ) : projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
@@ -359,9 +405,9 @@ export default function HomePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
               <ProjectCard
-                key={project.id}
+                key={project.projectId}
                 project={project}
-                onOpen={() => navigate(`/project/${project.id}`)}
+                onOpen={() => navigate(`/project/${project.projectId}`)}
                 onRename={() => setModal({ type: 'rename', project })}
                 onDelete={() => setModal({ type: 'delete', project })}
               />

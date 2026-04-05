@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { db } from '../db'
-import { useProjectStore } from '../store/projectStore'
+import { api } from '../lib/api'
+import { useProjectStore, flushPersist } from '../store/projectStore'
 import CanvasView, { type CanvasViewHandle } from '../components/canvas/CanvasView'
 import GuestListPanel from '../components/panels/GuestListPanel'
 import InspectorPanel from '../components/panels/InspectorPanel'
@@ -273,16 +273,29 @@ export default function ProjectPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [setPendingGuest])
 
-  // Load project from Dexie into the global store
+  // Load project from API into the global store
   useEffect(() => {
     if (!id) return
-    db.projects.get(id).then((p) => {
-      if (!p) { setNotFound(true); return }
-      const { project: fixed, repairs } = repairProject(p)
-      setProject(fixed)
-      if (repairs.length > 0) setRepairMessages(repairs)
-    })
+    api.getProject(id)
+      .then((p) => {
+        const { project: fixed, repairs } = repairProject(p)
+        setProject(fixed)
+        if (repairs.length > 0) setRepairMessages(repairs)
+      })
+      .catch(() => setNotFound(true))
   }, [id, setProject])
+
+  // Flush pending debounced save when user navigates away or closes the tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPersist()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      flushPersist()
+    }
+  }, [])
 
   const handleExportGuests = (format: 'csv' | 'json' | 'txt') => {
     if (!project) return
