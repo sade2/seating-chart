@@ -69,7 +69,7 @@ jobs:
       - name: Validate required variables
         run: |
           missing=()
-          test -n "${{ vars.INFRA_ROLE_ARN }}" || missing+=(INFRA_ROLE_ARN)
+          test -n "${{ secrets.INFRA_ROLE_ARN }}" || missing+=(INFRA_ROLE_ARN)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Missing required variables for environment 'dev': ${missing[*]}"
             exit 1
@@ -78,7 +78,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.INFRA_ROLE_ARN }}
+          role-to-assume: ${{ secrets.INFRA_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
