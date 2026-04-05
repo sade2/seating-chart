@@ -212,12 +212,12 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       preload                    = true
     }
 
-    x_frame_options {
+    frame_options {
       override     = true
       frame_option = "DENY"
     }
 
-    x_content_type_options {
+    content_type_options {
       override = true
     }
 

@@ -8,12 +8,12 @@ This document covers every component created for the AWS backend, how the pieces
 
 1. [Architecture Overview](#architecture-overview)
 2. [What Was Created](#what-was-created)
-   - [Terraform Bootstrap](#terraform-bootstrap)
-   - [Terraform Modules](#terraform-modules)
-   - [Environment](#environment)
-   - [Lambda (Backend API)](#lambda-backend-api)
-   - [GitHub Actions Workflows](#github-actions-workflows)
-   - [Frontend Code Changes](#frontend-code-changes)
+    - [Terraform Bootstrap](#terraform-bootstrap)
+    - [Terraform Modules](#terraform-modules)
+    - [Environment](#environment)
+    - [Lambda (Backend API)](#lambda-backend-api)
+    - [GitHub Actions Workflows](#github-actions-workflows)
+    - [Frontend Code Changes](#frontend-code-changes)
 3. [DynamoDB Data Model](#dynamodb-data-model)
 4. [API Reference](#api-reference)
 5. [Auth Flow (PKCE)](#auth-flow-pkce)
@@ -44,6 +44,7 @@ Auth:  Cognito Hosted UI (PKCE, no Amplify)
 ```
 
 **Key properties:**
+
 - Fully serverless — no EC2, no containers, no always-on cost
 - Multi-tenant via DynamoDB key isolation: every operation is scoped to `USER#{cognitoSub}`, never just `projectId`
 - Zero secrets in GitHub — OIDC-based credential exchange for all CI/CD
@@ -59,13 +60,13 @@ Auth:  Cognito Hosted UI (PKCE, no Amplify)
 
 Run once manually before anything else. Creates the global shared resources that all environments depend on. Uses **local state** (no remote backend needed for bootstrapping).
 
-| Resource | Name | Purpose |
-|---|---|---|
-| S3 bucket | `seating-chart-tfstate-{account_id}` | Remote Terraform state (versioned + encrypted) |
-| DynamoDB table | `seating-chart-tflock` | Terraform state locking (prevents concurrent applies) |
-| IAM OIDC provider | GitHub Actions | Federated trust for GitHub → AWS, no static keys |
-| IAM role | `github-actions-infra` | `AdministratorAccess` for Terraform apply |
-| IAM role | `github-actions-deploy` | Narrow: S3 sync, CloudFront invalidate, Lambda update |
+| Resource          | Name                                 | Purpose                                               |
+| ----------------- | ------------------------------------ | ----------------------------------------------------- |
+| S3 bucket         | `seating-chart-tfstate-{account_id}` | Remote Terraform state (versioned + encrypted)        |
+| DynamoDB table    | `seating-chart-tflock`               | Terraform state locking (prevents concurrent applies) |
+| IAM OIDC provider | GitHub Actions                       | Federated trust for GitHub → AWS, no static keys      |
+| IAM role          | `github-actions-infra`               | `AdministratorAccess` for Terraform apply             |
+| IAM role          | `github-actions-deploy`              | Narrow: S3 sync, CloudFront invalidate, Lambda update |
 
 The `github-actions-deploy` role is intentionally narrow — it cannot modify infrastructure, only deploy artifacts that Terraform already created.
 
@@ -80,6 +81,7 @@ All modules live in `infrastructure/modules/`. Each is self-contained with its o
 Creates the Cognito User Pool and app client.
 
 **Key settings:**
+
 - Sign-in by email (not username)
 - Email verification required before first sign-in
 - No client secret on the app client — required for PKCE from a SPA
@@ -96,6 +98,7 @@ Creates the Cognito User Pool and app client.
 Creates the DynamoDB table with the single-table design.
 
 **Key settings:**
+
 - `PAY_PER_REQUEST` billing (no capacity planning needed at small scale)
 - Hash key: `PK` (String), Range key: `SK` (String)
 - GSI1: `userId` (hash) + `updatedAt` (range) — costs nothing now, enables future admin queries and "recently modified" sorting
@@ -108,6 +111,7 @@ Creates the DynamoDB table with the single-table design.
 Creates the Lambda function and its IAM execution role.
 
 **Key settings:**
+
 - Runtime: Node.js 20.x, `arm64` architecture (Graviton2 — ~20% cheaper, faster cold starts than x86)
 - Memory: 256 MB, Timeout: 10 seconds
 - DynamoDB permissions: `GetItem`, `PutItem`, `UpdateItem`, `DeleteItem`, `Query` on the table and GSI1
@@ -122,6 +126,7 @@ Creates the Lambda function and its IAM execution role.
 Creates the API Gateway HTTP API with a JWT authorizer.
 
 **Key settings:**
+
 - HTTP API (v2) — cheaper and lower latency than REST API (v1)
 - CORS: allows all origins
 - JWT authorizer: validates Cognito access tokens before Lambda runs — Lambda never receives unauthenticated requests on protected routes
@@ -137,6 +142,7 @@ Creates the API Gateway HTTP API with a JWT authorizer.
 Creates the S3 bucket + CloudFront distribution for the React SPA.
 
 **Key settings:**
+
 - S3: private, no public access, versioning enabled. CloudFront accesses via OAC (Origin Access Control — the modern replacement for the legacy OAI)
 - `/assets/*` cache behavior: `max-age=31536000,immutable` — Vite content-hashes all JS/CSS filenames, so these are safe to cache forever
 - Default cache behavior (index.html + everything else): `no-cache` — ensures users always get the latest app shell
@@ -153,6 +159,7 @@ Creates the S3 bucket + CloudFront distribution for the React SPA.
 Creates the ACM certificate and its Route 53 DNS validation records only.
 
 **Key settings:**
+
 - ACM cert is created in `us-east-1` regardless of where the rest of the infra lives — CloudFront requires this
 - Uses a second provider alias (`provider "aws" { alias = "us_east_1" }`) to create the cert in the right region
 - DNS validation: Terraform creates the validation CNAME records in Route 53 and waits for ACM to confirm them
@@ -169,6 +176,7 @@ Creates the ACM certificate and its Route 53 DNS validation records only.
 **Location:** `infrastructure/environments/dev/`
 
 Single environment. Contains:
+
 - `backend.tf` — S3 remote state configuration (key: `dev/terraform.tfstate`)
 - `main.tf` — calls all modules; also defines the API Gateway custom domain and Route 53 alias records inline (not in modules) to avoid the circular dependency between the ACM cert, CloudFront, and DNS alias records
 - `variables.tf` — declares `domain_name` and `hosted_zone_id`
@@ -199,6 +207,7 @@ lambda/
 **`handler.ts`** — routes incoming requests by `method + path`, extracts the userId, dispatches to the correct function in `projects.ts`, and converts DynamoDB `ConditionalCheckFailedException` to the appropriate HTTP error (404 for missing items, 409 for duplicate creates).
 
 **`projects.ts`** — all DynamoDB calls. Notable details:
+
 - `listProjects`: uses `ProjectionExpression` — returns only metadata columns, never the `projectData` blob. This keeps the list response small even for large projects
 - `createProject`: uses `attribute_not_exists(PK)` condition to prevent overwriting an existing item
 - `saveProject`: uses `attribute_exists(PK)` condition to prevent creating orphan records (PUT only updates, never creates)
@@ -219,6 +228,7 @@ lambda/
 **Triggers:** push/PR to `main` with changes in `infrastructure/**`
 
 **Jobs:**
+
 1. `build-lambda` — runs `npm ci && npm run build` in `infrastructure/lambda/`, uploads `dist/handler.zip` as an artifact (retained 1 day)
 2. `terraform` — downloads artifact, configures OIDC credentials, `terraform init` → `terraform validate` → `terraform plan` on every run; `terraform apply` only on push to main
 
@@ -229,10 +239,12 @@ lambda/
 **Triggers:** push to `main` with changes in `src/**`, `public/**`, `index.html`, `vite.config.ts`, or `package*.json`
 
 **Jobs:**
+
 1. `deploy-frontend` — builds with `VITE_*` vars injected from GitHub Variables, syncs to S3 (assets with immutable headers, root files with no-cache), invalidates CloudFront
 2. `deploy-lambda` — builds Lambda, updates function code via `aws lambda update-function-code`
 
 **S3 sync strategy:** Two separate `aws s3 sync` calls per deploy:
+
 1. `dist/assets/` with `--cache-control "public,max-age=31536000,immutable"` — Vite hashes these filenames, so old cached versions and new versions coexist safely
 2. `dist/` (excluding assets) with `--cache-control "no-cache,no-store,must-revalidate"` — `index.html` must never be cached, otherwise users get stale app shells
 
@@ -249,6 +261,7 @@ The `--delete` flag removes old hashed asset files. Without it, the bucket fills
 Implements the full PKCE OAuth flow using only `fetch` and the Web Crypto API — no Amplify, no third-party auth library.
 
 Key functions:
+
 - `initiateLogin()` — generates a PKCE verifier + challenge, stores verifier in localStorage, redirects to Cognito Hosted UI
 - `handleCallback(code, state)` — validates state (CSRF protection), exchanges code for tokens via `POST /oauth2/token`, stores tokens in localStorage
 - `getAccessToken()` — returns the current access token; auto-refreshes via the refresh token if the access token is within 5 minutes of expiry
@@ -274,10 +287,12 @@ Mounted at `/auth/callback`. Reads `?code=` and `?state=` from the URL, calls `h
 #### Modified files
 
 **`src/App.tsx`**
+
 - Added `/auth/callback` route (unprotected — must be accessible before auth completes)
 - Wrapped `HomePage` and `ProjectPage` routes in `<ProtectedRoute>`
 
 **`src/pages/HomePage.tsx`**
+
 - All Dexie calls replaced with `api.*`
 - `NewProjectModal` now calls `api.createProject()` and shows a spinner + error state
 - `RenameModal` now calls `api.patchProject()` (PATCH, not full PUT — only sends the name)
@@ -287,11 +302,13 @@ Mounted at `/auth/callback`. Reads `?code=` and `?state=` from the URL, calls `h
 - Card props changed from `Project` to `ProjectMeta` — uses `projectId` instead of `id`, and `tableCount`/`guestCount`/`roomWidthFt`/`roomHeightFt` from the metadata instead of counting arrays
 
 **`src/pages/ProjectPage.tsx`**
+
 - Replaced `db.projects.get(id)` with `api.getProject(id)`
 - Added `visibilitychange` listener: when the browser tab is hidden (user closes tab or switches app), calls `flushPersist()` to immediately fire any pending debounced save
 - Cleanup effect also calls `flushPersist()` when the component unmounts (user navigates back to home)
 
 **`src/store/projectStore.ts`**
+
 - Replaced `db.projects.put(updated)` in `persist()` with a debounced `api.saveProject()` call
 - Debounce window: **1500ms** — the store is updated synchronously on every mutation (every drag pixel, every keypress), but the API is only called once per burst after the user pauses
 - `pendingProject` holds the latest project state; if the debounce fires, it sends the most current version
@@ -314,20 +331,20 @@ SK:  PROJECT#{projectId}    e.g.  PROJECT#e5f6a7b8-5678-...
 
 ### Item attributes
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `PK` | String | Partition key |
-| `SK` | String | Sort key |
-| `userId` | String | Denormalized Cognito sub (used by GSI1) |
-| `projectId` | String | Denormalized project UUID |
-| `name` | String | Project name |
-| `createdAt` | Number | Epoch ms |
-| `updatedAt` | Number | Epoch ms (used by GSI1) |
-| `roomWidthFt` | Number | For list endpoint metadata |
-| `roomHeightFt` | Number | For list endpoint metadata |
-| `tableCount` | Number | Denormalized count |
-| `guestCount` | Number | Denormalized count |
-| `projectData` | String | `JSON.stringify(fullProjectObject)` |
+| Attribute      | Type   | Notes                                   |
+| -------------- | ------ | --------------------------------------- |
+| `PK`           | String | Partition key                           |
+| `SK`           | String | Sort key                                |
+| `userId`       | String | Denormalized Cognito sub (used by GSI1) |
+| `projectId`    | String | Denormalized project UUID               |
+| `name`         | String | Project name                            |
+| `createdAt`    | Number | Epoch ms                                |
+| `updatedAt`    | Number | Epoch ms (used by GSI1)                 |
+| `roomWidthFt`  | Number | For list endpoint metadata              |
+| `roomHeightFt` | Number | For list endpoint metadata              |
+| `tableCount`   | Number | Denormalized count                      |
+| `guestCount`   | Number | Denormalized count                      |
+| `projectData`  | String | `JSON.stringify(fullProjectObject)`     |
 
 ### Why `projectData` is a JSON string (not a DynamoDB Map)
 
@@ -345,6 +362,7 @@ GSI1-SK: updatedAt
 ```
 
 Not used in v1. Defined now because adding a GSI to an existing table with data requires a table rebuild (hours of downtime) in DynamoDB. Enabling it now costs nothing. Useful future queries:
+
 - Admin: "show me all projects across all users"
 - User-facing: "sort projects by last modified"
 
@@ -358,22 +376,22 @@ All endpoints except `/v1/health` require `Authorization: Bearer {cognito-access
 
 ### Endpoints
 
-| Method | Path | Request Body | Response | Notes |
-|---|---|---|---|---|
-| `GET` | `/v1/health` | — | `{ status: "ok" }` | Unauthenticated |
-| `GET` | `/v1/projects` | — | `{ projects: ProjectMeta[] }` | No blob, metadata only |
-| `POST` | `/v1/projects` | `Project` object | `{ projectId: string }` | 409 if ID already exists |
-| `GET` | `/v1/projects/{id}` | — | Full `Project` object | 404 if not found or not owned |
-| `PUT` | `/v1/projects/{id}` | Full `Project` object | `{ updatedAt: number }` | Full replace; 404 if not exists |
-| `PATCH` | `/v1/projects/{id}` | `{ name: string }` | `{ updatedAt: number }` | Name-only update |
-| `DELETE` | `/v1/projects/{id}` | — | 204 No Content | 404 if not found or not owned |
+| Method   | Path                | Request Body          | Response                      | Notes                           |
+| -------- | ------------------- | --------------------- | ----------------------------- | ------------------------------- |
+| `GET`    | `/v1/health`        | —                     | `{ status: "ok" }`            | Unauthenticated                 |
+| `GET`    | `/v1/projects`      | —                     | `{ projects: ProjectMeta[] }` | No blob, metadata only          |
+| `POST`   | `/v1/projects`      | `Project` object      | `{ projectId: string }`       | 409 if ID already exists        |
+| `GET`    | `/v1/projects/{id}` | —                     | Full `Project` object         | 404 if not found or not owned   |
+| `PUT`    | `/v1/projects/{id}` | Full `Project` object | `{ updatedAt: number }`       | Full replace; 404 if not exists |
+| `PATCH`  | `/v1/projects/{id}` | `{ name: string }`    | `{ updatedAt: number }`       | Name-only update                |
+| `DELETE` | `/v1/projects/{id}` | —                     | 204 No Content                | 404 if not found or not owned   |
 
 ### Error response shape
 
 ```json
 {
-  "error": "VALIDATION_ERROR | FORBIDDEN | NOT_FOUND | CONFLICT | INTERNAL_ERROR",
-  "message": "Human-readable description"
+    "error": "VALIDATION_ERROR | FORBIDDEN | NOT_FOUND | CONFLICT | INTERNAL_ERROR",
+    "message": "Human-readable description"
 }
 ```
 
@@ -428,17 +446,17 @@ PKCE (Proof Key for Code Exchange) is the correct OAuth flow for SPAs. Unlike th
 
 At ~50 active users, ~500 API requests/day:
 
-| Service | Monthly |
-|---|---|
-| CloudFront | $0.00 (free tier: 1TB transfer, 10M requests) |
-| S3 | $0.00 (<1 GB storage, minimal requests) |
-| Lambda | $0.00 (free tier: 1M requests, 400K GB-seconds) |
-| API Gateway HTTP API | ~$0.05 (1$/million requests after 300M free) |
-| DynamoDB on-demand | ~$0.50 |
-| Route 53 hosted zone | $0.50/zone/month |
-| Cognito (<50K MAU) | $0.00 |
-| ACM certificate | $0.00 |
-| **Total** | **~$1.05/month** |
+| Service              | Monthly                                         |
+| -------------------- | ----------------------------------------------- |
+| CloudFront           | $0.00 (free tier: 1TB transfer, 10M requests)   |
+| S3                   | $0.00 (<1 GB storage, minimal requests)         |
+| Lambda               | $0.00 (free tier: 1M requests, 400K GB-seconds) |
+| API Gateway HTTP API | ~$0.05 (1$/million requests after 300M free)    |
+| DynamoDB on-demand   | ~$0.50                                          |
+| Route 53 hosted zone | $0.50/zone/month                                |
+| Cognito (<50K MAU)   | $0.00                                           |
+| ACM certificate      | $0.00                                           |
+| **Total**            | **~$1.05/month**                                |
 
 If cold starts become a concern, adding 1× provisioned concurrency (~$3/mo) eliminates them entirely.
 
@@ -451,20 +469,21 @@ If cold starts become a concern, adding 1× provisioned concurrency (~$3/mo) eli
 These are one-time manual steps before any Terraform runs.
 
 1. **Set up DNS for your domain**
-   - Create a Route 53 Hosted Zone for `myurl.com`
-   - If your domain is registered elsewhere (Vercel, Namecheap, etc.), update your registrar's nameservers to the four Route 53 nameservers shown in the hosted zone
-   - Copy the hosted zone ID from the Route 53 console (format: `Z1D633PJRANDOM`)
+    - Create a Route 53 Hosted Zone for `myurl.com`
+    - If your domain is registered elsewhere (Vercel, Namecheap, etc.), update your registrar's nameservers to the four Route 53 nameservers shown in the hosted zone
+    - Copy the hosted zone ID from the Route 53 console (format: `Z1D633PJRANDOM`)
 
 2. **Create/prepare your AWS account**
-   - Ensure you have credentials with AdministratorAccess for the initial bootstrap
-   - Run `aws configure` or set `AWS_PROFILE` to point to these credentials
+    - Ensure you have credentials with AdministratorAccess for the initial bootstrap
+    - Run `aws configure` or set `AWS_PROFILE` to point to these credentials
 
 3. **Install tooling**
-   ```bash
-   brew install terraform awscli
-   terraform -version   # should be >= 1.7
-   aws --version
-   ```
+
+    ```bash
+    brew install terraform awscli
+    terraform -version   # should be >= 1.7
+    aws --version
+    ```
 
 4. **Fork/clone the repo** and ensure GitHub Actions is enabled for the repository
 
@@ -487,6 +506,7 @@ terraform apply \
 ```
 
 After `apply` completes, note the outputs:
+
 ```
 tfstate_bucket          = "seating-chart-tfstate-123456789012"
 tflock_table            = "seating-chart-tflock"
@@ -498,9 +518,9 @@ github_deploy_role_arn  = "arn:aws:iam::123456789012:role/github-actions-deploy"
 
 **Set GitHub Actions Variables** (Settings → Secrets and variables → Actions → Variables tab):
 
-| Variable | Value |
-|---|---|
-| `INFRA_ROLE_ARN` | ARN from `github_infra_role_arn` output |
+| Variable          | Value                                    |
+| ----------------- | ---------------------------------------- |
+| `INFRA_ROLE_ARN`  | ARN from `github_infra_role_arn` output  |
 | `DEPLOY_ROLE_ARN` | ARN from `github_deploy_role_arn` output |
 
 ---
@@ -519,6 +539,7 @@ terraform apply
 ```
 
 This will create everything in one apply:
+
 - Cognito user pool + app client + hosted UI domain
 - DynamoDB table `seating-chart-dev`
 - Lambda function `seating-chart-projects-dev` (using the placeholder zip)
@@ -528,6 +549,7 @@ This will create everything in one apply:
 - Route 53 A + AAAA records for `seating-chart.myurl.com` and `api.seating-chart.myurl.com`
 
 Note the outputs:
+
 ```
 cognito_user_pool_id       = "us-east-1_XXXXXXXXX"
 cognito_client_id          = "xxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -538,6 +560,7 @@ cloudfront_distribution_id = "EDFDVBD6EXAMPLE"
 ```
 
 **Build and deploy the real Lambda code:**
+
 ```bash
 cd infrastructure/lambda
 npm ci
@@ -549,19 +572,21 @@ aws lambda update-function-code \
 ```
 
 **Test Lambda directly** (before testing through the API):
+
 - Open the Lambda console → `seating-chart-projects-dev` → Test tab
 - Create a test event for the health check:
-  ```json
-  {
-    "version": "2.0",
-    "requestContext": {
-      "http": { "method": "GET", "path": "/v1/health" }
+    ```json
+    {
+        "version": "2.0",
+        "requestContext": {
+            "http": { "method": "GET", "path": "/v1/health" }
+        }
     }
-  }
-  ```
+    ```
 - Expected response: `{ "statusCode": 200, "body": "{\"status\":\"ok\"}" }`
 
 **Test API Gateway with curl:**
+
 ```bash
 # Health (no auth)
 curl https://api.seating-chart.myurl.com/v1/health
@@ -572,6 +597,7 @@ curl https://api.seating-chart.myurl.com/v1/projects
 ```
 
 **Update `.env.development`** with the Terraform outputs:
+
 ```env
 VITE_API_URL=https://api.seating-chart.myurl.com/v1
 VITE_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
@@ -581,6 +607,7 @@ VITE_REDIRECT_URI=http://localhost:5173/auth/callback
 ```
 
 **Test the full auth flow locally:**
+
 ```bash
 npm run dev
 # Open http://localhost:5173
@@ -591,15 +618,23 @@ npm run dev
 ```
 
 **Deploy the frontend:**
+
+`npm run build` uses production mode and does NOT load `.env.development` (that file is only loaded by `npm run dev`). Pass the vars explicitly — and note `VITE_REDIRECT_URI` must be the deployed domain URL, not localhost:
+
 ```bash
+VITE_API_URL=https://api.seating-chart.cedricmcguire.com/v1 \
+VITE_COGNITO_USER_POOL_ID=us-east-1_3r7t7JlUA \
+VITE_COGNITO_CLIENT_ID=7h6sjsohka7d8h4a9f8jh46g74 \
+VITE_COGNITO_DOMAIN=https://auth-seating-chart-dev.auth.us-east-1.amazoncognito.com \
+VITE_REDIRECT_URI=https://seating-chart.cedricmcguire.com/auth/callback \
 npm run build
 
 # Sync assets (immutable cache)
-aws s3 sync dist/assets/ s3://seating-chart-frontend-dev-123456789012/assets/ \
+aws s3 sync dist/assets/ s3://seating-chart-frontend-dev-449342276858/assets/ \
   --cache-control "public,max-age=31536000,immutable" --delete
 
 # Sync root (no-cache)
-aws s3 sync dist/ s3://seating-chart-frontend-dev-123456789012/ \
+aws s3 sync dist/ s3://seating-chart-frontend-dev-449342276858/ \
   --cache-control "no-cache,no-store,must-revalidate" \
   --exclude "assets/*" --delete
 
@@ -610,6 +645,7 @@ aws cloudfront create-invalidation \
 ```
 
 **Verify:**
+
 - Open `https://seating-chart.myurl.com` — should load the app
 - Open `https://seating-chart.myurl.com/project/fake-id` — should still load the SPA (not a 404)
 - Hard refresh on that URL — same result
@@ -620,19 +656,19 @@ aws cloudfront create-invalidation \
 
 1. **Add GitHub Actions Variables** (Settings → Secrets and variables → Actions → Variables tab):
 
-   | Variable | Value |
-   |---|---|
-   | `API_URL` | `https://api.seating-chart.myurl.com/v1` |
-   | `COGNITO_USER_POOL_ID` | From Terraform output |
-   | `COGNITO_CLIENT_ID` | From Terraform output |
-   | `COGNITO_DOMAIN` | `https://auth-seating-chart-dev.auth.us-east-1.amazoncognito.com` |
-   | `REDIRECT_URI` | `https://seating-chart.myurl.com/auth/callback` |
-   | `FRONTEND_BUCKET` | From Terraform output |
-   | `CF_DISTRIBUTION_ID` | From Terraform output |
-   | `LAMBDA_FUNCTION_NAME` | `seating-chart-projects-dev` |
+    | Variable               | Value                                                             |
+    | ---------------------- | ----------------------------------------------------------------- |
+    | `API_URL`              | `https://api.seating-chart.myurl.com/v1`                          |
+    | `COGNITO_USER_POOL_ID` | From Terraform output                                             |
+    | `COGNITO_CLIENT_ID`    | From Terraform output                                             |
+    | `COGNITO_DOMAIN`       | `https://auth-seating-chart-dev.auth.us-east-1.amazoncognito.com` |
+    | `REDIRECT_URI`         | `https://seating-chart.myurl.com/auth/callback`                   |
+    | `FRONTEND_BUCKET`      | From Terraform output                                             |
+    | `CF_DISTRIBUTION_ID`   | From Terraform output                                             |
+    | `LAMBDA_FUNCTION_NAME` | `seating-chart-projects-dev`                                      |
 
 2. **Configure GitHub Environment** (Settings → Environments):
-   - Create a `dev` environment (no protection rules — auto-deploys on every push to main)
+    - Create a `dev` environment (no protection rules — auto-deploys on every push to main)
 
 3. **Push a small change** (e.g. update a comment in `src/App.tsx`) and watch both workflows run end-to-end in the Actions tab
 
@@ -656,18 +692,18 @@ This is a manual process per user. At small scale (<100 users), that's the right
 
 Full list of all variables needed across both workflows. All are GitHub Actions **Variables** (not Secrets) — they are not sensitive.
 
-| Variable | Where used | Description |
-|---|---|---|
-| `INFRA_ROLE_ARN` | `infra.yml` | IAM role for Terraform (from bootstrap output) |
-| `DEPLOY_ROLE_ARN` | `deploy.yml` | IAM role for S3/CF/Lambda deploys (from bootstrap output) |
-| `API_URL` | `deploy.yml` | `https://api.seating-chart.myurl.com/v1` |
-| `COGNITO_USER_POOL_ID` | `deploy.yml` | e.g. `us-east-1_XXXXXXXXX` |
-| `COGNITO_CLIENT_ID` | `deploy.yml` | App client ID |
-| `COGNITO_DOMAIN` | `deploy.yml` | `https://auth-seating-chart-dev.auth.us-east-1.amazoncognito.com` |
-| `REDIRECT_URI` | `deploy.yml` | `https://seating-chart.myurl.com/auth/callback` |
-| `FRONTEND_BUCKET` | `deploy.yml` | S3 bucket name from Terraform output |
-| `CF_DISTRIBUTION_ID` | `deploy.yml` | CloudFront distribution ID from Terraform output |
-| `LAMBDA_FUNCTION_NAME` | `deploy.yml` | `seating-chart-projects-dev` |
+| Variable               | Where used   | Description                                                       |
+| ---------------------- | ------------ | ----------------------------------------------------------------- |
+| `INFRA_ROLE_ARN`       | `infra.yml`  | IAM role for Terraform (from bootstrap output)                    |
+| `DEPLOY_ROLE_ARN`      | `deploy.yml` | IAM role for S3/CF/Lambda deploys (from bootstrap output)         |
+| `API_URL`              | `deploy.yml` | `https://api.seating-chart.myurl.com/v1`                          |
+| `COGNITO_USER_POOL_ID` | `deploy.yml` | e.g. `us-east-1_XXXXXXXXX`                                        |
+| `COGNITO_CLIENT_ID`    | `deploy.yml` | App client ID                                                     |
+| `COGNITO_DOMAIN`       | `deploy.yml` | `https://auth-seating-chart-dev.auth.us-east-1.amazoncognito.com` |
+| `REDIRECT_URI`         | `deploy.yml` | `https://seating-chart.myurl.com/auth/callback`                   |
+| `FRONTEND_BUCKET`      | `deploy.yml` | S3 bucket name from Terraform output                              |
+| `CF_DISTRIBUTION_ID`   | `deploy.yml` | CloudFront distribution ID from Terraform output                  |
+| `LAMBDA_FUNCTION_NAME` | `deploy.yml` | `seating-chart-projects-dev`                                      |
 
 ---
 
@@ -703,20 +739,24 @@ data "aws_iam_openid_connect_provider" "github" {
 ### Terraform apply fails: "error creating Lambda Function: operation error Lambda: CreateFunction, no such file"
 
 The Lambda zip doesn't exist. Build it first:
+
 ```bash
 cd infrastructure/lambda && npm ci && npm run build
 ```
+
 A placeholder `dist/handler.zip` is committed for the initial Terraform run, but it may have been gitignored. Check `.gitignore`.
 
 ### CloudFront returns 403 on deep links (e.g. `/project/some-uuid`)
 
 The SPA routing custom error responses should handle this. If you see 403s, verify:
+
 1. The `custom_error_response` blocks in `modules/frontend/main.tf` are applied (run `terraform apply`)
 2. The response code is `200` (not 404) — some CloudFront configs accidentally return 404
 
 ### Cognito: "redirect_uri mismatch" error
 
 The redirect URI in the auth request must exactly match one of the configured callback URLs. Check:
+
 1. `VITE_REDIRECT_URI` in `.env.development` matches what's in `modules/cognito/main.tf` `callback_urls`
 2. No trailing slashes
 3. `http` vs `https` must match exactly

@@ -23,11 +23,18 @@ dist-ssr
 *.sln
 *.sw?
 
-# env
+# env files — use .env.development.example as the committed template
 .env
+.env.development
+.env.local
+.env.*.local
+.env.production
 
 # Terraform
 .terraform/
+**/.terraform/
 terraform.tfstate
 terraform.tfstate.backup
+**/*.tfstate
+**/*.tfstate.backup
 *.tfvars

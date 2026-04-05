@@ -30,7 +30,7 @@ variable "provisioned_concurrency" {
 variable "lambda_zip_path" {
   description = "Path to the built handler.zip file"
   type        = string
-  default     = "../../../lambda/dist/handler.zip"
+  default     = "../../lambda/dist/handler.zip"
 }
 
 data "aws_region" "current" {}
