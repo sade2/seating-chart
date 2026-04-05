@@ -42,6 +42,8 @@ module "lambda" {
   env                     = local.env
   table_name              = module.dynamodb.table_name
   table_arn               = module.dynamodb.table_arn
+  user_pool_arn           = module.cognito.user_pool_arn
+  user_pool_id            = module.cognito.user_pool_id
   log_retention_days      = 7
   provisioned_concurrency = 0
 }

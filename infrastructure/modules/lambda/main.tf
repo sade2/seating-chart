@@ -33,6 +33,16 @@ variable "lambda_zip_path" {
   default     = "../../lambda/dist/handler.zip"
 }
 
+variable "user_pool_arn" {
+  description = "Cognito User Pool ARN (for cognito-idp:ListUsers IAM permission)"
+  type        = string
+}
+
+variable "user_pool_id" {
+  description = "Cognito User Pool ID (passed to Lambda as env var for user lookups)"
+  type        = string
+}
+
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
@@ -88,6 +98,21 @@ resource "aws_iam_role_policy" "dynamodb" {
   policy = data.aws_iam_policy_document.dynamodb.json
 }
 
+# Cognito permissions (user lookup by email for share invitations)
+data "aws_iam_policy_document" "cognito" {
+  statement {
+    effect    = "Allow"
+    actions   = ["cognito-idp:ListUsers"]
+    resources = [var.user_pool_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "cognito" {
+  name   = "cognito-access"
+  role   = aws_iam_role.lambda.id
+  policy = data.aws_iam_policy_document.cognito.json
+}
+
 # ── CloudWatch Log Group ───────────────────────────────────────────────────────
 
 resource "aws_cloudwatch_log_group" "lambda" {
@@ -115,8 +140,9 @@ resource "aws_lambda_function" "main" {
 
   environment {
     variables = {
-      TABLE_NAME = var.table_name
-      ENV        = var.env
+      TABLE_NAME          = var.table_name
+      ENV                 = var.env
+      COGNITO_USER_POOL_ID = var.user_pool_id
     }
   }
 
