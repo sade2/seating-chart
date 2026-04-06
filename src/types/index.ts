@@ -26,11 +26,22 @@ export interface Project {
   name: string
   createdAt: number
   updatedAt: number
+  version?: number
   room: Room
   tables: Table[]
   guests: Guest[]
   shapes: CanvasShape[]
   texts: CanvasText[]
+}
+
+export type ShareRole = 'edit' | 'view'
+export type ShareStatus = 'active' | 'pending'
+
+export interface ProjectShare {
+  email: string
+  role: ShareRole
+  status: ShareStatus
+  sharedAt: number
 }
 
 export interface TracedFloorPlan {

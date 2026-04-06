@@ -1,7 +1,7 @@
 // ── API client — typed fetch wrapper with auto Bearer token ────────────────────
 
 import { getAccessToken } from './auth'
-import type { Project } from '../types'
+import type { Project, ProjectShare, ShareRole } from '../types'
 
 export interface ProjectMeta {
   projectId: string
@@ -12,6 +12,10 @@ export interface ProjectMeta {
   roomHeightFt: number
   tableCount: number
   guestCount: number
+  // Populated for projects shared with the current user
+  isShared?: boolean
+  sharedByEmail?: string
+  ownerUserId?: string
 }
 
 // ── Base fetch ─────────────────────────────────────────────────────────────────
@@ -56,6 +60,13 @@ export class ApiError extends Error {
   }
 }
 
+export class VersionConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VersionConflictError'
+  }
+}
+
 // ── API methods ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -75,11 +86,24 @@ export const api = {
     })
   },
 
-  async saveProject(projectId: string, project: Project): Promise<{ updatedAt: number }> {
-    return apiFetch<{ updatedAt: number }>(`/projects/${projectId}`, {
-      method: 'PUT',
-      body: JSON.stringify(project),
-    })
+  async saveProject(
+    projectId: string,
+    project: Project,
+    expectedVersion?: number
+  ): Promise<{ updatedAt: number; version: number }> {
+    try {
+      return await apiFetch<{ updatedAt: number; version: number }>(`/projects/${projectId}`, {
+        method: 'PUT',
+        body: JSON.stringify(
+          expectedVersion !== undefined ? { ...project, expectedVersion } : project
+        ),
+      })
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') {
+        throw new VersionConflictError(e.message)
+      }
+      throw e
+    }
   },
 
   async patchProject(projectId: string, name: string): Promise<{ updatedAt: number }> {
@@ -91,5 +115,27 @@ export const api = {
 
   async deleteProject(projectId: string): Promise<void> {
     return apiFetch<void>(`/projects/${projectId}`, { method: 'DELETE' })
+  },
+
+  async listShares(projectId: string): Promise<ProjectShare[]> {
+    const res = await apiFetch<{ shares: ProjectShare[] }>(`/projects/${projectId}/shares`)
+    return res.shares
+  },
+
+  async shareProject(
+    projectId: string,
+    email: string,
+    role: ShareRole = 'edit'
+  ): Promise<{ status: 'active' | 'pending' }> {
+    return apiFetch<{ status: 'active' | 'pending' }>(`/projects/${projectId}/shares`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    })
+  },
+
+  async revokeShare(projectId: string, email: string): Promise<void> {
+    return apiFetch<void>(`/projects/${projectId}/shares/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+    })
   },
 }

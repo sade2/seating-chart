@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useProjectStore, flushPersist } from '../store/projectStore'
 import CanvasView, { type CanvasViewHandle } from '../components/canvas/CanvasView'
@@ -14,6 +14,7 @@ import CreateShapeModal from '../components/modals/CreateShapeModal'
 import AddGuestModal from '../components/modals/AddGuestModal'
 import EditTableModal from '../components/modals/EditTableModal'
 import CanvasContextMenu, { type ContextMenuInfo } from '../components/canvas/CanvasContextMenu'
+import ShareModal from '../components/ShareModal'
 
 // ── Insert Menu ───────────────────────────────────────────────────────────────
 
@@ -238,9 +239,16 @@ function SettingsMenu({ onSelect }: { onSelect: (item: 'rename' | 'resize' | 'fl
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // isOwner defaults to true when navigating directly by URL; the dashboard
+  // passes { state: { isShared: true } } for projects shared with the user.
+  const isOwner = !(location.state as { isShared?: boolean } | null)?.isShared
 
   const project = useProjectStore((s) => s.project)
   const setProject = useProjectStore((s) => s.setProject)
+  const conflictDetected = useProjectStore((s) => s.conflictDetected)
+  const clearConflict = useProjectStore((s) => s.clearConflict)
   const pendingGuestId = useProjectStore((s) => s.pendingGuestId)
   const setPendingGuest = useProjectStore((s) => s.setPendingGuest)
   const addText = useProjectStore((s) => s.addText)
@@ -263,6 +271,8 @@ export default function ProjectPage() {
   const [exportToast, setExportToast] = useState<string | null>(null)
   const [repairMessages, setRepairMessages] = useState<string[]>([])
   const [settingsModal, setSettingsModal] = useState<null | 'rename' | 'resize' | 'floorplan'>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [reloading, setReloading] = useState(false)
 
   // Escape key cancels assignment mode
   useEffect(() => {
@@ -296,6 +306,22 @@ export default function ProjectPage() {
       flushPersist()
     }
   }, [])
+
+  const handleReloadAfterConflict = async () => {
+    if (!id) return
+    setReloading(true)
+    try {
+      const p = await api.getProject(id)
+      const { project: fixed } = repairProject(p)
+      setProject(fixed)
+      clearConflict()
+    } catch {
+      // If reload fails, just clear the conflict flag so the user isn't stuck
+      clearConflict()
+    } finally {
+      setReloading(false)
+    }
+  }
 
   const handleExportGuests = (format: 'csv' | 'json' | 'txt') => {
     if (!project) return
@@ -369,6 +395,18 @@ export default function ProjectPage() {
             }}
           />
           <ExportMenu onExport={handleExport} onExportGuests={handleExportGuests} />
+          <button
+            onClick={() => setShareOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="2.5" r="1.5" />
+              <circle cx="11" cy="11.5" r="1.5" />
+              <circle cx="3" cy="7" r="1.5" />
+              <path d="M9.5 3.3L4.4 6.2M9.5 10.7L4.4 7.8" />
+            </svg>
+            Share
+          </button>
           <span className="text-xs text-slate-400">
             {project.room.widthFt} × {project.room.heightFt} ft
           </span>
@@ -395,6 +433,22 @@ export default function ProjectPage() {
           </div>
         ) : null
       })()}
+
+      {/* Version conflict banner */}
+      {conflictDetected && (
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2.5">
+          <p className="text-sm text-amber-800">
+            This project was modified by a collaborator. Reload to see the latest version.
+          </p>
+          <button
+            onClick={handleReloadAfterConflict}
+            disabled={reloading}
+            className="ml-4 shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {reloading ? 'Reloading…' : 'Reload'}
+          </button>
+        </div>
+      )}
 
       {/* Data repair banner */}
       {repairMessages.length > 0 && (
@@ -516,6 +570,15 @@ export default function ProjectPage() {
       )}
       {settingsModal === 'floorplan' && (
         <FloorPlanImportModal onClose={() => setSettingsModal(null)} />
+      )}
+
+      {/* Share modal */}
+      {shareOpen && id && (
+        <ShareModal
+          projectId={id}
+          isOwner={isOwner}
+          onClose={() => setShareOpen(false)}
+        />
       )}
     </div>
   )

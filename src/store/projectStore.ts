@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api } from '../lib/api'
+import { api, VersionConflictError } from '../lib/api'
 import type { Project, Table, Guest, Room, TracedFloorPlan, CanvasShape, CanvasText } from '../types'
 
 interface ProjectStore {
@@ -48,6 +48,10 @@ interface ProjectStore {
   removeFloorPlan: () => Promise<void>
   updateFloorPlanOpacity: (opacity: number) => Promise<void>
 
+  // Conflict state — set when a save is rejected due to a version mismatch
+  conflictDetected: boolean
+  clearConflict: () => void
+
   // Selection state
   selectedTableId: string | null
   selectedSeatId: string | null
@@ -73,12 +77,29 @@ interface ProjectStore {
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 let pendingProject: Project | null = null
 
+async function executeSave(project: Project) {
+  try {
+    const result = await api.saveProject(project.id, project, project.version)
+    // Update the stored version so the next save sends the correct expectedVersion
+    const current = useProjectStore.getState().project
+    if (current?.id === project.id) {
+      useProjectStore.setState({ project: { ...current, version: result.version } })
+    }
+  } catch (e) {
+    if (e instanceof VersionConflictError) {
+      useProjectStore.setState({ conflictDetected: true })
+    } else {
+      console.error('Save failed:', e)
+    }
+  }
+}
+
 function persist(updated: Project) {
   pendingProject = updated
   if (persistTimer) clearTimeout(persistTimer)
   persistTimer = setTimeout(() => {
     if (pendingProject) {
-      api.saveProject(pendingProject.id, pendingProject).catch(console.error)
+      executeSave(pendingProject)
       pendingProject = null
     }
     persistTimer = null
@@ -91,7 +112,7 @@ export function flushPersist() {
     persistTimer = null
   }
   if (pendingProject) {
-    api.saveProject(pendingProject.id, pendingProject).catch(console.error)
+    executeSave(pendingProject)
     pendingProject = null
   }
 }
@@ -105,8 +126,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   selectedShapeId: null,
   selectedTextId: null,
   pendingGuestId: null,
+  conflictDetected: false,
 
-  setProject: (project) => set({ project }),
+  setProject: (project) => set({ project, conflictDetected: false }),
+  clearConflict: () => set({ conflictDetected: false }),
 
   addTable: async (table) => {
     const { project } = get()
