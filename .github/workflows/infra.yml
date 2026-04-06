@@ -94,9 +94,8 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -no-color -out=tfplan
-        continue-on-error: true
+        run: terraform plan -no-color -lock-timeout=60s -out=tfplan
 
       - name: Terraform Apply (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outcome == 'success'
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve -lock-timeout=60s tfplan
