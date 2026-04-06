@@ -23,7 +23,7 @@ export function getUserId(event: APIGatewayProxyEventV2WithJWTAuthorizer): strin
  */
 export function getUserEmail(event: APIGatewayProxyEventV2WithJWTAuthorizer): string {
   const claims = event.requestContext.authorizer.jwt.claims
-  const email = claims['email'] ?? claims['cognito:username']
+  const email = claims['email'] ?? claims['username']
   if (!email || typeof email !== 'string') {
     throw new Error('Missing email/username claim in JWT — this should never happen on authorized routes')
   }

@@ -34,6 +34,14 @@ function err(statusCode: number, code: string, message: string): APIGatewayProxy
   return json(statusCode, { error: code, message })
 }
 
+// ── Structured logger ──────────────────────────────────────────────────────────
+
+function log(level: 'INFO' | 'WARN' | 'ERROR', message: string, data?: Record<string, unknown>) {
+  console[level === 'INFO' ? 'log' : level === 'WARN' ? 'warn' : 'error'](
+    JSON.stringify({ level, message, ...data })
+  )
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function handler(
@@ -41,6 +49,8 @@ export async function handler(
 ): Promise<APIGatewayProxyResultV2> {
   const method = event.requestContext.http.method
   const path = event.requestContext.http.path
+
+  log('INFO', 'Request received', { method, path })
 
   // Health check — unauthenticated
   if (method === 'GET' && path === '/v1/health') {
@@ -52,9 +62,17 @@ export async function handler(
   try {
     userId = getUserId(event)
     userEmail = getUserEmail(event)
-  } catch {
+  } catch (e) {
+    // Log which claims are present (keys only — values may contain PII)
+    const claims = event.requestContext.authorizer?.jwt?.claims ?? {}
+    log('ERROR', 'Auth claim extraction failed', {
+      error: e instanceof Error ? e.message : String(e),
+      claimsPresent: Object.keys(claims),
+    })
     return err(401, 'UNAUTHORIZED', 'Missing or invalid authorization')
   }
+
+  log('INFO', 'Auth resolved', { userId, path, method })
 
   try {
     // ── GET /v1/projects ───────────────────────────────────────────────────────
@@ -270,7 +288,12 @@ export async function handler(
 
     return err(405, 'METHOD_NOT_ALLOWED', 'Method not allowed')
   } catch (e) {
-    console.error('Unhandled error:', e)
+    log('ERROR', 'Unhandled error', {
+      method,
+      path,
+      error: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack : undefined,
+    })
     return err(500, 'INTERNAL_ERROR', 'An unexpected error occurred')
   }
 }
