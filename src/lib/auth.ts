@@ -205,6 +205,25 @@ export async function getAccessToken(): Promise<string> {
   return tokens.accessToken
 }
 
+// ── Current user info ──────────────────────────────────────────────────────────
+
+/**
+ * Decodes the stored id_token payload (base64url) to read the email claim.
+ * No signature verification needed — we trust tokens issued by our own Cognito.
+ * Returns null if no token is stored or the payload can't be decoded.
+ */
+export function getCurrentUserEmail(): string | null {
+  try {
+    const tokens = loadTokens()
+    if (!tokens?.idToken) return null
+    const payload = tokens.idToken.split('.')[1]
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>
+    return typeof decoded['email'] === 'string' ? decoded['email'] : null
+  } catch {
+    return null
+  }
+}
+
 // ── Logout ─────────────────────────────────────────────────────────────────────
 
 export function logout(): void {
