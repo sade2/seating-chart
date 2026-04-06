@@ -75,6 +75,8 @@ jobs:
               run: |
                   missing=()
                   test -n "${{ secrets.INFRA_ROLE_ARN }}" || missing+=(INFRA_ROLE_ARN)
+                  test -n "${{ secrets.TF_DOMAIN_NAME }}" || missing+=(TF_DOMAIN_NAME)
+                  test -n "${{ secrets.TF_HOSTED_ZONE_ID }}" || missing+=(TF_HOSTED_ZONE_ID)
                   if [ ${#missing[@]} -gt 0 ]; then
                     echo "Missing required variables for environment 'dev': ${missing[*]}"
                     exit 1
