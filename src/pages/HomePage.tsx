@@ -389,7 +389,8 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setModal({ type: 'new' })}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+              disabled={!!loadError}
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path d="M8 2v12M2 8h12" strokeLinecap="round" />
