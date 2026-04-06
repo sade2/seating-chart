@@ -50,6 +50,28 @@ export async function listProjects(userId: string): Promise<ProjectMeta[]> {
   return (res.Items ?? []) as ProjectMeta[]
 }
 
+// ── Get Project Metadata (list view, no projectData) ──────────────────────────
+
+/**
+ * Fetches only the metadata fields for a project — used when building the
+ * shared-projects list without loading the full projectData blob.
+ */
+export async function getProjectMeta(
+  ownerUserId: string,
+  projectId: string
+): Promise<ProjectMeta | null> {
+  const res = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: pk(ownerUserId), SK: sk(projectId) },
+      ExpressionAttributeNames: { '#name': 'name' },
+      ProjectionExpression: 'projectId, #name, createdAt, updatedAt, roomWidthFt, roomHeightFt, tableCount, guestCount',
+    })
+  )
+
+  return (res.Item as ProjectMeta) ?? null
+}
+
 // ── Get Project ────────────────────────────────────────────────────────────────
 
 /**
