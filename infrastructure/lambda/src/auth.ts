@@ -15,12 +15,17 @@ export function getUserId(event: APIGatewayProxyEventV2WithJWTAuthorizer): strin
 
 /**
  * Extracts the email from the JWT authorizer claims.
- * Always present in Cognito tokens since email is the sign-in identifier.
+ *
+ * Cognito's access_token (validated by API Gateway) does not include the
+ * 'email' claim — that lives only in the id_token. However, 'cognito:username'
+ * IS present in the access_token and equals the email address when the user
+ * pool is configured with username_attributes = ["email"].
  */
 export function getUserEmail(event: APIGatewayProxyEventV2WithJWTAuthorizer): string {
-  const email = event.requestContext.authorizer.jwt.claims['email']
+  const claims = event.requestContext.authorizer.jwt.claims
+  const email = claims['email'] ?? claims['cognito:username']
   if (!email || typeof email !== 'string') {
-    throw new Error('Missing email claim in JWT — this should never happen on authorized routes')
+    throw new Error('Missing email/username claim in JWT — this should never happen on authorized routes')
   }
   return email
 }
