@@ -17,6 +17,7 @@ permissions:
 env:
   TF_VERSION: "1.7.5"
   AWS_REGION: us-east-1
+  TF_LOG: INFO
 
 jobs:
   # ── Build Lambda (required before terraform plan) ──────────────────────────
@@ -94,8 +95,10 @@ jobs:
 
       - name: Terraform Plan
         id: plan
+        timeout-minutes: 10
         run: terraform plan -no-color -lock-timeout=60s -out=tfplan
 
       - name: Terraform Apply (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outcome == 'success'
+        timeout-minutes: 15
         run: terraform apply -auto-approve -lock-timeout=60s tfplan
