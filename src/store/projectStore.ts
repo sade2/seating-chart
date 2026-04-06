@@ -73,26 +73,15 @@ interface ProjectStore {
 //
 // flushPersist() is exported so ProjectPage can trigger an immediate save when
 // the tab loses visibility (user closes / switches tab).
-//
-// Concurrency invariant: only one save is in-flight at a time. If edits arrive
-// while a save is in-flight, pendingProject is updated but no second request is
-// started. The in-flight save's finally block chains into the next save once the
-// response arrives, at which point the store version is current and safe to use
-// as expectedVersion.
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 let pendingProject: Project | null = null
-let saveInFlight = false
 
-async function executeSave() {
-  if (saveInFlight || !pendingProject) return
-
-  saveInFlight = true
-  const project = pendingProject
-  pendingProject = null
-
-  // Read version from the store at execution time — never from the captured
-  // snapshot, which may be stale relative to a recently completed save.
+async function executeSave(project: Project) {
+  // Read version from the store at execution time, not from the captured project
+  // snapshot. The snapshot's version may be stale if a previous save completed
+  // while the debounce timer was still running (the store will have been updated
+  // by that save's response, but the snapshot won't reflect it).
   const expectedVersion = useProjectStore.getState().project?.version
   try {
     const result = await api.saveProject(project.id, project, expectedVersion)
@@ -106,13 +95,6 @@ async function executeSave() {
     } else {
       console.error('Save failed:', e)
     }
-  } finally {
-    saveInFlight = false
-    // If edits arrived while we were saving, chain into the next save now that
-    // the store version has been updated by this save's response.
-    if (pendingProject) {
-      executeSave()
-    }
   }
 }
 
@@ -120,8 +102,11 @@ function persist(updated: Project) {
   pendingProject = updated
   if (persistTimer) clearTimeout(persistTimer)
   persistTimer = setTimeout(() => {
+    if (pendingProject) {
+      executeSave(pendingProject)
+      pendingProject = null
+    }
     persistTimer = null
-    executeSave()
   }, 1500)
 }
 
@@ -130,7 +115,10 @@ export function flushPersist() {
     clearTimeout(persistTimer)
     persistTimer = null
   }
-  executeSave()
+  if (pendingProject) {
+    executeSave(pendingProject)
+    pendingProject = null
+  }
 }
 
 // ── Store ──────────────────────────────────────────────────────────────────────
