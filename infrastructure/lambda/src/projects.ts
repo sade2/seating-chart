@@ -93,7 +93,10 @@ export async function getProject(userId: string, projectId: string): Promise<obj
   const projectData = res.Item.projectData
   if (typeof projectData === 'string') {
     try {
-      return JSON.parse(projectData)
+      const parsed = JSON.parse(projectData) as Record<string, unknown>
+      // Merge version from its dedicated DynamoDB attribute so the client can
+      // send it back as expectedVersion on the next save.
+      return { ...parsed, version: res.Item['version'] ?? 1 }
     } catch {
       return null
     }

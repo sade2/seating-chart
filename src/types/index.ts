@@ -26,7 +26,7 @@ export interface Project {
   name: string
   createdAt: number
   updatedAt: number
-  version: number
+  version?: number
   room: Room
   tables: Table[]
   guests: Guest[]

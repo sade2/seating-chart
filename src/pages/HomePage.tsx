@@ -460,7 +460,7 @@ export default function HomePage() {
                     <ProjectCard
                       key={project.projectId}
                       project={project}
-                      onOpen={() => navigate(`/project/${project.projectId}`)}
+                      onOpen={() => navigate(`/project/${project.projectId}`, { state: { isShared: true } })}
                       onRename={() => {}}
                       onDelete={() => {}}
                     />
