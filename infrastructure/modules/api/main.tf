@@ -81,6 +81,9 @@ locals {
     "PUT /v1/projects/{id}",
     "PATCH /v1/projects/{id}",
     "DELETE /v1/projects/{id}",
+    "GET /v1/projects/{id}/shares",
+    "POST /v1/projects/{id}/shares",
+    "DELETE /v1/projects/{id}/shares/{email}",
   ]
 }
 

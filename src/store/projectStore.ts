@@ -78,9 +78,13 @@ let persistTimer: ReturnType<typeof setTimeout> | null = null
 let pendingProject: Project | null = null
 
 async function executeSave(project: Project) {
+  // Read version from the store at execution time, not from the captured project
+  // snapshot. The snapshot's version may be stale if a previous save completed
+  // while the debounce timer was still running (the store will have been updated
+  // by that save's response, but the snapshot won't reflect it).
+  const expectedVersion = useProjectStore.getState().project?.version
   try {
-    const result = await api.saveProject(project.id, project, project.version)
-    // Update the stored version so the next save sends the correct expectedVersion
+    const result = await api.saveProject(project.id, project, expectedVersion)
     const current = useProjectStore.getState().project
     if (current?.id === project.id) {
       useProjectStore.setState({ project: { ...current, version: result.version } })
